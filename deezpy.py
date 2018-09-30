@@ -486,10 +486,10 @@ def menu():
         if selectDownloadMode == '1':
             while True:
                 link = input("Download link: ")
-                if "deezer" in link: # TODO make this regex
-                    downloadDeezer(link)
-                else:
+                if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)(playlist|artist|album|track|)\/[0-9]*', link) is None:
                     print("Not a valid link")
+                else:
+                    downloadDeezer(link)
 
         elif selectDownloadMode == '2':
             if os.path.isfile('downloads.txt'):
@@ -506,5 +506,4 @@ def menu():
 print("Thank you for using Deezpy!")
 print("Please consider supporting the artists!")
 print('')
-session = requests.Session()
 menu()
