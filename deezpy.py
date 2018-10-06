@@ -502,7 +502,7 @@ def menu():
             print("Invalid option!")
         print('')
 
-
+session = requests.session()
 print("Thank you for using Deezpy!")
 print("Please consider supporting the artists!")
 print('')
