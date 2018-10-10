@@ -28,12 +28,9 @@ import time
 
 # not in standard library:
 import requests
+import mutagen
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-
-import mutagen
-from mutagen.flac import Picture
-from mutagen.id3 import APIC, TXXX
 
 
 def initDeezerApi(email, pswd):
@@ -145,6 +142,7 @@ def getInfo(id):
         privateInfo = privateApi(id) # basically, we need to replace the track with the FALLBACK one
     trackInfo = getJSON('track', id)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
+    #print(albInfo)
     
     #if the preferred quality is not available, get the one below etc.
     quality = ''
@@ -203,7 +201,8 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'artist'      : trackInfo['artist']['name'],
             'albumartist' : albInfo['artist']['name'],
             'totaltracks' : albInfo['nb_tracks'],
-            'label'       : albInfo['label']
+            'label'       : albInfo['label'],
+            'genre'       : albInfo['genres']['data'][0]['name']
             }
     filename, file_extension = os.path.splitext(filenameFull)
     image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder 
@@ -214,7 +213,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
         for key, val in tags.items():
             handle[key] = str(val)
         if getSetting('embed covers'):
-            pic = Picture()
+            pic = mutagen.flac.Picture()
             pic.data = image
             handle.clear_pictures()
             handle.add_picture(pic)
@@ -227,9 +226,9 @@ def writeTags(filenameFull, trackInfo, albInfo):
         for item in list(handle.tags):
             handle.tags.delall(item)
         for key, val in tags.items():
-            handle.tags.add(TXXX(desc=key, text=str(val)))
+            handle.tags.add(mutagen.id3.TXXX(desc=key, text=str(val)))
         if getSetting('embed covers'):
-            handle.tags.add(APIC(data=image))
+            handle.tags.add(mutagen.id3.APIC(data=image))
     handle.save()
 
 
