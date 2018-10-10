@@ -199,6 +199,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'album'       : trackInfo['album']['title'],
             'date'        : trackInfo['album']['release_date'],
             'artist'      : trackInfo['artist']['name'],
+            'bpm'         : trackInfo['bpm'],
             'albumartist' : albInfo['artist']['name'],
             'totaltracks' : albInfo['nb_tracks'],
             'label'       : albInfo['label'],
@@ -347,7 +348,6 @@ def makePath(filenameFull):
 def getTrack(id,playlist=False):
     ''' Calls the necessary functions to download and tag the tracks. playlist must be a tuple of (playlistInfo, playlistTrack) '''
     trackInfo, albInfo, privateInfo, quality = getInfo(id)
-    
     if trackInfo['readable'] == False:
         print("Song", trackInfo['title'], "not available, skipping...") # TODO find a way to try to find an alternative (available) song
         return False
