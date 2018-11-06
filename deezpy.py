@@ -495,12 +495,14 @@ def menu():
                     downloadDeezer(link)
 
         elif selectDownloadMode == '2':
-            if os.path.isfile('downloads.txt'):
-                links = [line.rstrip() for line in open('downloads.txt','r')]
+            try:
+                batchFile = open('downloads.txt', 'r')
+            except IOError:
+                print("No downloads.txt file found")               
+            else:
+                links = [line.rstrip() for line in batchFile]
                 links = list(filter(None, links)) # filters any empty lines
                 [downloadDeezer(link) for link in links]
-            else:
-                print("No downloads.txt file found")
         else:
             print("Invalid option!")
         print('')
