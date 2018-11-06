@@ -13,7 +13,7 @@
 #more details.
 
 #You should have received a copy of the GNU General Public License along
-#with this program. If not, see <http://www.gnu.org/licenses/>.
+#with this program. If not, see <http://www.gnu.org/licenses/>
 
 # standard library:
 import hashlib
@@ -29,13 +29,15 @@ import time
 # not in standard library:
 import requests
 import mutagen
+from mutagen.easyid3 import EasyID3
+from mutagen.mp3 import MP3
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
 
 def initDeezerApi(email, pswd):
     ''' Inits the Deezer API and handles user login. Four POST requests have to be made.
-        The first three are to log in, the last one is to obtain a CSRF token. This function 
+        The first three are to log in, the last one is to obtain a CSRF token. This function
         is only called once, at the start of the script. '''
     global httpHeaders
     httpHeaders = {
@@ -143,7 +145,7 @@ def getInfo(id):
     trackInfo = getJSON('track', id)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
     #print(albInfo)
-    
+
     #if the preferred quality is not available, get the one below etc.
     quality = ''
     while not quality:
@@ -205,8 +207,9 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'label'       : albInfo['label'],
             'genre'       : albInfo['genres']['data'][0]['name']
             }
+  
     filename, file_extension = os.path.splitext(filenameFull)
-    image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder 
+    image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder
     handle = mutagen.File(filenameFull)
     if type(handle) is mutagen.flac.FLAC:
         for key, val in list(handle.tags.items()):
@@ -220,16 +223,17 @@ def writeTags(filenameFull, trackInfo, albInfo):
             handle.add_picture(pic)
 
     elif type(handle) is mutagen.mp3.MP3:
-        try:
-            handle.add_tags()
-        except:
-            pass
-        for item in list(handle.tags):
-            handle.tags.delall(item)
+        handle = MP3(filenameFull, ID3=EasyID3)
+        EasyID3.RegisterTextKey("totaltracks", "TRCK") # total tracks and label are not supported by easyID3, so we add them
+        EasyID3.RegisterTextKey("label", "TPUB")
+        tags['tracknumber'] = str(tags['tracknumber']) + '/' + str(tags['totaltracks']) # tracknumber and total tracks is one tag for ID3
+        del tags['totaltracks']
         for key, val in tags.items():
-            handle.tags.add(mutagen.id3.TXXX(desc=key, text=str(val)))
+            handle[key] = str(val)
         if getSetting('embed covers'):
             handle.tags.add(mutagen.id3.APIC(data=image))
+    else:
+        print("Could not write tags. File extension not supported.")
     handle.save()
 
 
@@ -239,7 +243,7 @@ def multireplace(string, replacements):
     # Sorts the dict so that longer ones first to keep shorter substrings from matching where the longer ones should take place
     substrs = sorted(replacements, key=len, reverse=True)
     # Create a big OR regex that matches any of the substrings to replace
-    regexp = re.compile('|'.join(map(re.escape, substrs))) 
+    regexp = re.compile('|'.join(map(re.escape, substrs)))
 
     # For each match, look up the new string in the replacements
     return regexp.sub(lambda match: replacements[match.group(0)], string)
@@ -267,26 +271,26 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
     # Regex that removes anything that is not an alphanumeric, space, dash, underscore, dot or parentheses for every tag. It is now a valid filename
     for key,val in replacedict.items():
         replacedict[key] = re.sub(r'(?u)[^-\w.( )]', '', val)
-    
+
     # Replace pathspec with desired tags
     filename = multireplace(pathspec, replacedict)
     return filename
 
 
 def getTrackDownloadUrl(data, quality):
-    ''' Calculates the deezer download URL from 
+    ''' Calculates the deezer download URL from
     a given MD5_origin, song_id and media_version '''
     step1 = '¤'.join((data['MD5_ORIGIN'],
                       quality, data['SNG_ID'],
-                      data['MEDIA_VERSION']))    
+                      data['MEDIA_VERSION']))
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in step1]))
     step2 = m.hexdigest() + '¤' + step1 + '¤'
     step2 = step2.ljust(80, ' ')
-    
+
     cipher = Cipher(algorithms.AES(bytes('jo6aey6haid2Teih','ascii')), modes.ECB(), default_backend())
     encryptor = cipher.encryptor()
-    
+
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
     cdn = "%x" % random.randint(0, 15)
     url = 'https://e-cdns-proxy-' + cdn + '.dzcdn.net/mobile/1/' + step3
@@ -355,7 +359,7 @@ def getTrack(id,playlist=False):
     if playlist: # puts some playlist info into existing info, it's a bit of a hack, I know.
         albInfo['nb_tracks'] = playlist[0]['nb_tracks']
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
-        
+
     if quality == '9':
         ext = '.flac'
     else:
@@ -380,7 +384,7 @@ def downloadDeezer(url):
         getTrack(id)
 
     elif type == 'playlist': # we can't invoke downloadDeezer() again, as used in the else block because playlists have a different tracklisting, not available in JSON format
-        info = getJSON(type, id, 'tracks')        
+        info = getJSON(type, id, 'tracks')
         ids = [x["id"] for x in info['data']]
 
         playlistInfo = getJSON(type, id)
@@ -416,9 +420,9 @@ def setSetting(option, value):
     ''' Writes an option to the config file '''
     with open('settings.json', 'r') as conf:
         confEdit = json.load(conf)
-    
+
     confEdit[option] = value
-    
+
     with open('settings.json', 'w') as conf:
         json.dump(confEdit, conf, indent=4)
 
@@ -439,7 +443,7 @@ def genSettingsconf():
     with open("settings.json", 'w') as conf:
         dict = {}
         json.dump(json.loads('{}'), conf)
-    
+
     print("Setting up download path...")
     pathspec = 'downloads/%ALBUM ARTIST%/(%YEAR%) - %ALBUM%/%DISC%-%TRACK% - %TITLE%'
     setSetting('path specification', pathspec)
@@ -462,7 +466,7 @@ def genSettingsconf():
 def menu():
     if not os.path.isfile("settings.json"):
         genSettingsconf()
-    
+
     email = getSetting('email')
     pswd = getSetting('password')
     if not email or not pswd:
@@ -481,7 +485,7 @@ def menu():
         print("1) Single link")
         print("2) All links (Download all links from downloads.txt, one link per line)")
         selectDownloadMode = input("Choice: ")
-        
+
         if selectDownloadMode == '1':
             while True:
                 link = input("Download link: ")
