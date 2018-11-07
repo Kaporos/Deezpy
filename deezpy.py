@@ -25,6 +25,8 @@ import sys
 import getpass
 import base64
 import time
+from collections import defaultdict
+from functools import partial
 
 # not in standard library:
 import requests
@@ -134,7 +136,7 @@ def getJSON(type, id, subtype=None):
     else:
         url = 'https://api.deezer.com/%s/%s/?limit=-1' % (type, id)
     r = session.get(url)
-    return json.loads(r.text)
+    return json.loads(r.text, object_pairs_hook=partial(defaultdict, lambda: '')) # https://stackoverflow.com/questions/50013768/how-can-i-convert-nested-dictionary-to-defaultdict
 
 
 def getInfo(id):
@@ -144,9 +146,8 @@ def getInfo(id):
         privateInfo = privateApi(id) # basically, we need to replace the track with the FALLBACK one
     trackInfo = getJSON('track', id)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
-    #print(albInfo)
 
-    #if the preferred quality is not available, get the one below etc.
+    # if the preferred quality is not available, get the one below etc.
     quality = ''
     while not quality:
         qualitySetting = getSetting("quality")
@@ -205,15 +206,12 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'albumartist' : albInfo['artist']['name'],
             'totaltracks' : albInfo['nb_tracks'],
             'label'       : albInfo['label'],
-            'genre'       : albInfo['genres']['data'][0]['name']
+            'genre'       : albInfo['genres']['data'][0]['name'],
             }
-  
     filename, file_extension = os.path.splitext(filenameFull)
     image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder
     handle = mutagen.File(filenameFull)
     if type(handle) is mutagen.flac.FLAC:
-        for key, val in list(handle.tags.items()):
-            del handle[key]
         for key, val in tags.items():
             handle[key] = str(val)
         if getSetting('embed covers'):
@@ -224,8 +222,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
 
     elif type(handle) is mutagen.mp3.MP3:
         handle = MP3(filenameFull, ID3=EasyID3)
-        EasyID3.RegisterTextKey("totaltracks", "TRCK") # total tracks and label are not supported by easyID3, so we add them
-        EasyID3.RegisterTextKey("label", "TPUB")
+        EasyID3.RegisterTextKey("label", "TPUB") # label is not supported by easyID3, so we add it
         tags['tracknumber'] = str(tags['tracknumber']) + '/' + str(tags['totaltracks']) # tracknumber and total tracks is one tag for ID3
         del tags['totaltracks']
         for key, val in tags.items():
