@@ -212,6 +212,8 @@ def getCoverArt(url, filename):
 def writeTags(filenameFull, trackInfo, albInfo):
     ''' Function to write tags to the file, be it FLAC or MP3 '''
     # retrieve tags
+    try: genre = albInfo['genres']['data'][0]['name']
+    except: genre = ''
     tags = {
             'title'       : trackInfo['title'],
             'discnumber'  : trackInfo['disk_number'],
@@ -223,11 +225,12 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'albumartist' : albInfo['artist']['name'],
             'totaltracks' : albInfo['nb_tracks'],
             'label'       : albInfo['label'],
-            'genre'       : albInfo['genres']['data'][0]['name'],
+            'genre'       : genre,
             }
     filename, file_extension = os.path.splitext(filenameFull)
     image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder
     handle = mutagen.File(filenameFull)
+    handle.delete() # remove pre-existent tags
     if type(handle) is mutagen.flac.FLAC:
         for key, val in tags.items():
             handle[key] = str(val)
@@ -264,24 +267,24 @@ def multireplace(string, replacements):
 
 
 def nameFile(trackInfo, albInfo, playlistInfo=False):
-    pathspec = getSetting('path specification')
     # Dictionary to replace pathspec with
-    replacedict = {
-                '%ALBUM ARTIST%' : albInfo['artist']['name'],
-                '%ALBUM%'        : trackInfo['album']['title'],
-                '%YEAR%'         : trackInfo['album']['release_date'],
-                '%TRACK%'        : '%02d' % trackInfo['track_position'],
-                '%DISC%'         : '%d' % trackInfo['disk_number'],
-                '%TITLE%'        : trackInfo['title']
-                }
-
     if playlistInfo:
         pathspec = getSetting('playlist path specification')
         replacedict = {
-                '%PLAYLIST TITLE%' : playlistInfo[0]['title'],
-                '%TRACK%'          : playlistInfo[1],
-                '%TITLE%'          : trackInfo['title']
-                }
+            '%PLAYLIST TITLE%' : playlistInfo[0]['title'],
+            '%TRACK%'          : '%d' % playlistInfo[1],
+            '%TITLE%'          : trackInfo['title']
+            }
+    else:
+        pathspec = getSetting('path specification')
+        replacedict = {
+            '%ALBUM ARTIST%' : albInfo['artist']['name'],
+            '%ALBUM%'        : trackInfo['album']['title'],
+            '%YEAR%'         : trackInfo['album']['release_date'],
+            '%TRACK%'        : '%02d' % trackInfo['track_position'],
+            '%DISC%'         : '%d' % trackInfo['disk_number'],
+            '%TITLE%'        : trackInfo['title']
+            }
     # Regex that removes anything that is not an alphanumeric, space, dash, underscore, dot or parentheses for every tag. It is now a valid filename
     for key,val in replacedict.items():
         replacedict[key] = re.sub(r'(?u)[^-\w.( )]', '', val)
@@ -334,7 +337,6 @@ def downloadTrack(filenameFull, privateInfo, quality):
             else:
                 cipher = Cipher(algorithms.Blowfish((bfKey)), modes.CBC(bytes([i for i in range(8)])), default_backend())
                 decryptor = cipher.decryptor()
-
                 decdata = decryptor.update(chunk) + decryptor.finalize()
                 fd.write(decdata)
             if len(chunk) < 2048:
@@ -369,8 +371,13 @@ def getTrack(id,playlist=False):
         print("Song", trackInfo['title'], "not available, skipping...") # TODO find a way to try to find an alternative (available) song
         return False
 
-    if playlist: # puts some playlist info into existing info, it's a bit of a hack, I know.
+    if playlist: # edit some info to get playlist suitable tags
+        albInfo['artist']['name'] = 'Various Artists'
         albInfo['nb_tracks'] = playlist[0]['nb_tracks']
+        trackInfo['album']['title'] = playlist[0]['title']
+        trackInfo['track_position'] = playlist[1]
+        trackInfo['disk_number'] = ''
+        trackInfo['album']['release_date'] = ''
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
 
     if quality == '9':
@@ -402,7 +409,7 @@ def downloadDeezer(url):
         playlistInfo = getJSON(type, id)
         playlistTrack = 1
         for id in ids:
-            playlist = (playlistInfo, str(playlistTrack))
+            playlist = (playlistInfo, playlistTrack)
             getTrack(id, playlist)
             playlistTrack = playlistTrack + 1
 
