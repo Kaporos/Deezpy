@@ -30,6 +30,8 @@ from functools import partial
 
 # not in standard library:
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import mutagen
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
@@ -59,14 +61,14 @@ def initDeezerApi(email, pswd):
         'method'      : 'deezer.getUserData'
                             }
 
-    req = session.post(
+    req = requests_retry_session(session=s).post(
         url     = 'https://www.deezer.com/ajax/gw-light.php',
         headers = httpHeaders,
         params  = unofficialApiQueries
                     )
     res = json.loads(req.text)
 
-    login = session.post(
+    login = requests_retry_session(session=s).post(
         url = "https://www.deezer.com/ajax/action.php",
         # Note that these headers differ from httpHeaders
         headers = {
@@ -91,14 +93,14 @@ def initDeezerApi(email, pswd):
         print("Facebook and family accounts are not supported. If you use one, please create a new account."), print("")
         initDeezerApi(*autoLogin())
 
-    req = session.post(
+    req = requests_retry_session(session=s).post(
         url     = 'https://www.deezer.com/ajax/gw-light.php',
         headers = httpHeaders,
         params  = unofficialApiQueries
         )
 
     # A cross-site request forgery token is needed. It is used as api token in privateApi(id)
-    req = session.post(
+    req = requests_retry_session(session=s).post(
         url     = 'https://www.deezer.com/ajax/gw-light.php',
         headers = httpHeaders,
         params  = unofficialApiQueries
@@ -118,7 +120,7 @@ def privateApi(id):
         'method'      : 'deezer.pageTrack'
             }
 
-    req = session.post(
+    req = requests_retry_session(session=s).post(
         url     = 'https://www.deezer.com/ajax/gw-light.php',
         headers = httpHeaders,
         params  = unofficialApiQueries,
@@ -128,6 +130,22 @@ def privateApi(id):
     res = json.loads(req.text)
     return res['results']['DATA']
 
+# https://www.peterbe.com/plog/best-practice-with-retries-with-requests
+def requests_retry_session(retries=3, backoff_factor=0.3, status_forcelist=(500, 502, 504), session=None):
+    session = session or requests.Session()
+    retry = Retry(
+        total = retries,
+        read = retries,
+        connect = retries,
+        backoff_factor = backoff_factor,
+        status_forcelist = status_forcelist,
+        method_whitelist = frozenset(['GET', 'POST'])
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
 
 def getJSON(type, id, subtype=None):
     ''' Official API. This function is used to download the ID3 tags. Subtype can be 'albums' or 'tracks' '''
@@ -135,8 +153,8 @@ def getJSON(type, id, subtype=None):
         url = 'https://api.deezer.com/%s/%s/%s?limit=-1' % (type, id, subtype)
     else:
         url = 'https://api.deezer.com/%s/%s/?limit=-1' % (type, id)
-    r = session.get(url)
-    return json.loads(r.text, object_pairs_hook=partial(defaultdict, lambda: '')) # https://stackoverflow.com/questions/50013768/how-can-i-convert-nested-dictionary-to-defaultdict
+    r = requests_retry_session(session=s).get(url)
+    return json.loads(r.text, object_pairs_hook=partial(defaultdict, lambda: ''))
 
 
 def getInfo(id):
@@ -171,7 +189,6 @@ def getInfo(id):
                 quality = '1'
             else:
                 raise
-
     return trackInfo, albInfo, privateInfo, quality
 
 
@@ -184,7 +201,7 @@ def getCoverArt(url, filename):
         os.makedirs(path)
     if not os.path.isfile(imageFile):
         with open(imageFile, 'wb') as f:
-            r = session.get(url)
+            r = requests_retry_session(session=s).get(url)
             f.write(r.content)
             return r.content
     else:
@@ -304,7 +321,7 @@ def downloadTrack(filenameFull, privateInfo, quality):
     # Stream file
     print("Dowloading " + filenameFull + "...")
     url = getTrackDownloadUrl(privateInfo, quality)
-    r = session.get(url, stream = True)
+    r = requests_retry_session(session=s).get(url, stream = True)
     bfKey = getBlowfishKey(privateInfo['SNG_ID'])
 
     # Decrypt content and write to file
@@ -323,7 +340,6 @@ def downloadTrack(filenameFull, privateInfo, quality):
             if len(chunk) < 2048:
                 break
             i += 1
-
     os.rename(filename+'.tmp', filenameFull)
 
 
@@ -370,7 +386,6 @@ def getTrack(id,playlist=False):
     downloadTrack(filenameFull, privateInfo, quality)
     writeTags(filenameFull, trackInfo, albInfo)
     print("Done!")
-    time.sleep(1)
 
 
 def downloadDeezer(url):
@@ -504,7 +519,7 @@ def menu():
             print("Invalid option!")
         print('')
 
-session = requests.session()
+s = requests.Session()
 print("Thank you for using Deezpy!")
 print("Please consider supporting the artists!")
 print('')
