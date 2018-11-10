@@ -228,29 +228,31 @@ def writeTags(filenameFull, trackInfo, albInfo):
             'genre'       : genre,
             }
     filename, file_extension = os.path.splitext(filenameFull)
-    image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder
-    handle = mutagen.File(filenameFull)
-    handle.delete() # remove pre-existent tags
-    if type(handle) is mutagen.flac.FLAC:
-        for key, val in tags.items():
-            handle[key] = str(val)
+    image = getCoverArt(trackInfo['album']['cover_xl'], filename) # downloads the image in the folder and loads it
+    if file_extension == '.flac':
+        handle = mutagen.File(filenameFull)
+        handle.delete() # delete pre-existing tags
         if getSetting('embed covers'):
             pic = mutagen.flac.Picture()
             pic.data = image
             handle.clear_pictures()
             handle.add_picture(pic)
 
-    elif type(handle) is mutagen.mp3.MP3:
+    elif file_extension == '.mp3':
         handle = MP3(filenameFull, ID3=EasyID3)
+        handle.delete()
         EasyID3.RegisterTextKey("label", "TPUB") # label is not supported by easyID3, so we add it
+        EasyID3.RegisterTextKey("albumart", "APIC")
         tags['tracknumber'] = str(tags['tracknumber']) + '/' + str(tags['totaltracks']) # tracknumber and total tracks is one tag for ID3
         del tags['totaltracks']
-        for key, val in tags.items():
-            handle[key] = str(val)
         if getSetting('embed covers'):
-            handle.tags.add(mutagen.id3.APIC(data=image))
+            handle["albumart"] = mutagen.id3.APIC(data=image)
     else:
         print("Could not write tags. File extension not supported.")
+        return False
+    
+    for key, val in tags.items():
+        handle[key] = str(val)
     handle.save()
 
 
@@ -371,6 +373,11 @@ def getTrack(id,playlist=False):
         print("Song", trackInfo['title'], "not available, skipping...") # TODO find a way to try to find an alternative (available) song
         return False
 
+    if quality == '9':
+        ext = '.flac'
+    else:
+        ext = '.mp3'
+
     if playlist: # edit some info to get playlist suitable tags
         albInfo['artist']['name'] = 'Various Artists'
         albInfo['nb_tracks'] = playlist[0]['nb_tracks']
@@ -379,11 +386,6 @@ def getTrack(id,playlist=False):
         trackInfo['disk_number'] = ''
         trackInfo['album']['release_date'] = ''
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
-
-    if quality == '9':
-        ext = '.flac'
-    else:
-        ext = '.mp3'
     filenameFull = nameFile(trackInfo,albInfo,playlist) + ext
 
     if makePath(filenameFull) == False:
