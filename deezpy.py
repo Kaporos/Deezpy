@@ -24,7 +24,6 @@ import os
 import sys
 import getpass
 import base64
-import time
 from collections import defaultdict
 from functools import partial
 
