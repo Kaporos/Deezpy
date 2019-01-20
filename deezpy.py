@@ -86,10 +86,9 @@ def initDeezerApi(email, pswd):
 
     # Login returns 'success' if it was a successful login, login is not successful if it returns 200
     if login.text == "success":
-        print("Login successful"), print("")
+        print("Login successful\n")
     else:
-        print("Login failed, wrong Deezer credentials.")
-        print("Facebook and family accounts are not supported. If you use one, please create a new account."), print("")
+        print("Login failed, wrong Deezer credentials.\nFacebook and family accounts are not supported. If you use one, please create a new account.\n")
         initDeezerApi(*autoLogin())
 
     req = requests_retry_session(session=s).post(
@@ -450,7 +449,7 @@ def setSetting(option, value):
 def autoLogin():
     ''' Creates autologin setting in settings.conf '''
     email = input("Deezer email: ")
-    pswd = getpass.getpass('Deezer password (input is hidden): ')
+    pswd = getpass.getpass('Deezer password: ')
     pswd_encoded = base64.b64encode(pswd.encode('utf-8')) # not really secure, but it is recommended to use a throwaway account anyway
     pswd_encoded = pswd_encoded.decode('utf-8')
     setSetting('email', email)
@@ -471,11 +470,7 @@ def genSettingsconf():
     pathspec = 'downloads/playlists/%PLAYLIST TITLE%/%TRACK% - %TITLE%'
     setSetting('playlist path specification', pathspec)
 
-    print("Select download quality:")
-    print("1) Flac 1411 kbps")
-    print("2) MP3 320 kbps")
-    print("3) Mp3 256 kbps")
-    print("4) MP3 128 kbps")
+    print("Select download quality:\n1) Flac 1411 kbps\n2) MP3 320 kbps\n3) Mp3 256 kbps\n4) MP3 128 kbps")
     quality = input("Choice: ")
 
     setSetting('quality', quality)
@@ -501,9 +496,7 @@ def menu():
     initDeezerApi(email, pswd) # if the login fails with these credentials, autoLogin() is called again
 
     while True:
-        print("Select download mode")
-        print("1) Single link")
-        print("2) All links (Download all links from downloads.txt, one link per line)")
+        print("Select download mode\n1) Single link\n2) All links (Download all links from downloads.txt, one link per line)")
         selectDownloadMode = input("Choice: ")
 
         if selectDownloadMode == '1':
@@ -528,7 +521,5 @@ def menu():
         print('')
 
 s = requests.Session()
-print("Thank you for using Deezpy!")
-print("Please consider supporting the artists!")
-print('')
+print("Thank you for using Deezpy!\nPlease consider supporting the artists!\n")
 menu()
