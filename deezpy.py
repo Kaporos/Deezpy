@@ -249,7 +249,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
     else:
         print("Could not write tags. File extension not supported.")
         return False
-    
+
     for key, val in tags.items():
         handle[key] = str(val)
     handle.save()
@@ -310,7 +310,7 @@ def getTrackDownloadUrl(data, quality):
     encryptor = cipher.encryptor()
 
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
-    cdn = "%x" % random.randint(0, 15)
+    cdn = data['MD5_ORIGIN'][0]
     url = 'https://e-cdns-proxy-' + cdn + '.dzcdn.net/mobile/1/' + step3
     return url
 
@@ -518,7 +518,7 @@ def menu():
             try:
                 batchFile = open('downloads.txt', 'r')
             except IOError:
-                print("No downloads.txt file found")               
+                print("No downloads.txt file found")
             else:
                 links = [line.rstrip() for line in batchFile]
                 links = list(filter(None, links)) # filters any empty lines
