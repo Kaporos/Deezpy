@@ -18,7 +18,6 @@
 # standard library:
 import hashlib
 import json
-import random
 import re
 import os
 import sys
@@ -42,6 +41,8 @@ def initDeezerApi(email, pswd):
     ''' Inits the Deezer API and handles user login. Four POST requests have to be made.
         The first three are to log in, the last one is to obtain a CSRF token. This function
         is only called once, at the start of the script. '''
+    global s
+    s = requests.Session()
     global httpHeaders
     httpHeaders = {
         'User-Agent'       : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',
@@ -158,7 +159,7 @@ def getJSON(type, id, subtype=None):
 def getInfo(id):
     privateInfo = privateApi(id)
     if "FALLBACK" in privateInfo:
-        id = privateInfo["FALLBACK"]['SNG_ID'] # Some songs in a playlist have other IDs than the same song in a album/artist page. These ids from songs in a playlist do not return albInfo properly. The FALLBACK id works, however.
+        id = privateInfo["FALLBACK"]['SNG_ID'] # Some songs in a playlist have other IDs than the same song in an album/artist page. These ids from songs in a playlist do not return albInfo properly. The FALLBACK id works, however.
         privateInfo = privateApi(id) # basically, we need to replace the track with the FALLBACK one
     trackInfo = getJSON('track', id)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
@@ -365,7 +366,8 @@ def makePath(filenameFull):
 
 
 def getTrack(id,playlist=False):
-    ''' Calls the necessary functions to download and tag the tracks. playlist must be a tuple of (playlistInfo, playlistTrack) '''
+    ''' Calls the necessary functions to download and tag the tracks.
+        Playlist must be a tuple of (playlistInfo, playlistTrack) '''
     trackInfo, albInfo, privateInfo, quality = getInfo(id)
     if trackInfo['readable'] == False:
         print("Song", trackInfo['title'], "not available, skipping...") # TODO find a way to try to find an alternative (available) song
@@ -388,11 +390,10 @@ def getTrack(id,playlist=False):
 
     if makePath(filenameFull) == False:
         print(filenameFull + " already exists!")
-        return False
-
-    downloadTrack(filenameFull, privateInfo, quality)
-    writeTags(filenameFull, trackInfo, albInfo)
-    print("Done!")
+    else:
+        downloadTrack(filenameFull, privateInfo, quality)
+        writeTags(filenameFull, trackInfo, albInfo)
+        print("Done!")
 
 
 def downloadDeezer(url):
@@ -458,6 +459,8 @@ def autoLogin():
 
 
 def genSettingsconf():
+    ''' Generates a settings file containing the download path,
+        playlist download path, song quality, username and password.  '''
     print("Settings file not found. Generating the file...")
     with open("settings.json", 'w') as conf:
         dict = {}
@@ -476,6 +479,25 @@ def genSettingsconf():
     setSetting('quality', quality)
     autoLogin()
     print("If you wish to edit any of these settings, you can do so now in settings.json. See the README for more details.")
+
+
+def singleDownload(link):
+    if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)(playlist|artist|album|track|)\/[0-9]*', link) is None:
+        print("Not a valid link")
+    else:
+        downloadDeezer(link)
+
+
+def batchDownload(queueFile):
+    ''' Fetches links from a txt file '''
+    try:
+        batchFile = open(queueFile, 'r')
+    except IOError:
+        print("No", queueFile, "file found")
+    else:
+        links = [line.rstrip() for line in batchFile]
+        links = list(filter(None, links)) # filters any empty lines
+        [downloadDeezer(link) for link in links]
 
 
 def menu():
@@ -502,24 +524,14 @@ def menu():
         if selectDownloadMode == '1':
             while True:
                 link = input("Download link: ")
-                if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)(playlist|artist|album|track|)\/[0-9]*', link) is None:
-                    print("Not a valid link")
-                else:
-                    downloadDeezer(link)
+                singleDownload(link)
 
         elif selectDownloadMode == '2':
-            try:
-                batchFile = open('downloads.txt', 'r')
-            except IOError:
-                print("No downloads.txt file found")
-            else:
-                links = [line.rstrip() for line in batchFile]
-                links = list(filter(None, links)) # filters any empty lines
-                [downloadDeezer(link) for link in links]
+            batchDownload('downloads.txt')
         else:
-            print("Invalid option!")
-        print('')
+            print("Invalid option.\n")
 
-s = requests.Session()
-print("Thank you for using Deezpy!\nPlease consider supporting the artists!\n")
-menu()
+if __name__ == '__main__':
+    print("Thank you for using Deezpy.\nPlease consider supporting the artists!\n")
+    menu()
+
