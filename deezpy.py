@@ -262,13 +262,12 @@ def multireplace(string, replacements):
     substrs = sorted(replacements, key=len, reverse=True)
     # Create a big OR regex that matches any of the substrings to replace
     regexp = re.compile('|'.join(map(re.escape, substrs)))
-
     # For each match, look up the new string in the replacements
     return regexp.sub(lambda match: replacements[match.group(0)], string)
 
 
 def nameFile(trackInfo, albInfo, playlistInfo=False):
-    # Dictionary to replace pathspec with
+    # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
         pathspec = getSetting('playlist path specification')
         replacedict = {
@@ -286,12 +285,12 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '%DISC%'         : '%d' % trackInfo['disk_number'],
             '%TITLE%'        : trackInfo['title']
             }
-    # Regex that removes anything that is not an alphanumeric, space, dash, underscore, dot or parentheses for every tag. It is now a valid filename
     for key,val in replacedict.items():
-        replacedict[key] = re.sub(r'(?u)[^-\w.( )]', '', val)
+        val = re.sub(r'(?u)[^-\w.( )]', '', val) # Regex that removes anything that is not an alphanumeric (+non-latin chars), space, dash, underscore, dot or parentheses for every tag.
+        val = val.encode('utf-8')[:250].decode('utf-8', 'ignore') # folder dirs and the filename are now max 250 bytes long
+        replacedict[key] = val
 
-    # Replace pathspec with desired tags
-    filename = multireplace(pathspec, replacedict)
+    filename = multireplace(pathspec, replacedict) # replace pathspec with desired tags
     return filename
 
 
@@ -534,4 +533,5 @@ def menu():
 if __name__ == '__main__':
     print("Thank you for using Deezpy.\nPlease consider supporting the artists!\n")
     menu()
+
 
