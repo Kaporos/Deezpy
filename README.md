@@ -28,17 +28,17 @@ If you want to change the quality setting, you can edit the `settings.ini` file.
 ## Download path options
 There are many options available for the path specification.
 For album tracks:
-- <Album Artist>
-- <Album>
-- <Year>
-- <Track#>
-- <Disc#>
-- <Title>
+- Album Artist
+- Album
+- Year
+- Track#
+- Disc#
+- Title
 
 For playlists:
-- <Playlist Title>
-- <Track#>
-- <Title>
+- Playlist Title
+- Track#
+- Title
 
 You can modify these to your liking by editing the settings file. The forward slashes indicate a new folder. The default path specifications serve as an example.
 
