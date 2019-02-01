@@ -16,13 +16,13 @@
 #with this program. If not, see <http://www.gnu.org/licenses/>
 
 # standard library:
+import configparser
+import getpass
 import hashlib
 import json
-import re
 import os
+import re
 import sys
-import getpass
-import base64
 from collections import defaultdict
 from functools import partial
 
@@ -85,12 +85,15 @@ def initDeezerApi(email, pswd):
             }
         )
 
-    # Login returns 'success' if it was a successful login, login is not successful if it returns 200
+    # Login returns 'success' if it was a successful login, login is not successful if it returns 200 and credentials is called again
     if login.text == "success":
         print("Login successful\n")
+    elif login.status_code == 200:
+        print("\nLogin failed, wrong Deezer credentials.\nFacebook and family accounts are not supported. If you use one, please create a new account.\n")
+        return False
     else:
-        print("Login failed, wrong Deezer credentials.\nFacebook and family accounts are not supported. If you use one, please create a new account.\n")
-        initDeezerApi(*autoLogin())
+        print("Error logging in. Error code:"+login.status_code)
+        exit()
 
     req = requests_retry_session(session=s).post(
         url     = 'https://www.deezer.com/ajax/gw-light.php',
@@ -108,6 +111,7 @@ def initDeezerApi(email, pswd):
     res = json.loads(req.text)
     global CSRFToken
     CSRFToken = res['results']['checkForm']
+    return True
 
 
 def privateApi(id):
@@ -153,7 +157,7 @@ def getJSON(type, id, subtype=None):
     else:
         url = 'https://api.deezer.com/%s/%s/?limit=-1' % (type, id)
     r = requests_retry_session(session=s).get(url)
-    return json.loads(r.text, object_pairs_hook=partial(defaultdict, lambda: ''))
+    return json.loads(r.text)
 
 
 def getInfo(id):
@@ -231,7 +235,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
     if file_extension == '.flac':
         handle = mutagen.File(filenameFull)
         handle.delete() # delete pre-existing tags
-        if getSetting('embed covers'):
+        if getSetting('embed covers') == 'True':
             pic = mutagen.flac.Picture()
             pic.data = image
             handle.clear_pictures()
@@ -244,7 +248,7 @@ def writeTags(filenameFull, trackInfo, albInfo):
         EasyID3.RegisterTextKey("albumart", "APIC")
         tags['tracknumber'] = str(tags['tracknumber']) + '/' + str(tags['totaltracks']) # tracknumber and total tracks is one tag for ID3
         del tags['totaltracks']
-        if getSetting('embed covers'):
+        if getSetting('embed covers') == 'True':
             handle["albumart"] = mutagen.id3.APIC(data=image)
     else:
         print("Could not write tags. File extension not supported.")
@@ -269,21 +273,21 @@ def multireplace(string, replacements):
 def nameFile(trackInfo, albInfo, playlistInfo=False):
     # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
-        pathspec = getSetting('playlist path specification')
+        pathspec = getSetting('playlist naming template')
         replacedict = {
-            '%PLAYLIST TITLE%' : playlistInfo[0]['title'],
-            '%TRACK%'          : '%d' % playlistInfo[1],
-            '%TITLE%'          : trackInfo['title']
+            '<Playlist Title>' : playlistInfo[0]['title'],
+            '<Track#>'         : '%d' % playlistInfo[1],
+            '<Title>'          : trackInfo['title']
             }
     else:
-        pathspec = getSetting('path specification')
+        pathspec = getSetting('naming template')
         replacedict = {
-            '%ALBUM ARTIST%' : albInfo['artist']['name'],
-            '%ALBUM%'        : trackInfo['album']['title'],
-            '%YEAR%'         : trackInfo['album']['release_date'],
-            '%TRACK%'        : '%02d' % trackInfo['track_position'],
-            '%DISC%'         : '%d' % trackInfo['disk_number'],
-            '%TITLE%'        : trackInfo['title']
+            '<Album Artist>' : albInfo['artist']['name'],
+            '<Album>'        : trackInfo['album']['title'],
+            '<Year>'         : trackInfo['album']['release_date'],
+            '<Track#>'       : '%02d' % trackInfo['track_position'],
+            '<Disc#>'        : '%d' % trackInfo['disk_number'],
+            '<Title>'        : trackInfo['title']
             }
     for key,val in replacedict.items():
         val = re.sub(r'(?u)[^-\w.( )]', '', val) # Regex that removes anything that is not an alphanumeric (+non-latin chars), space, dash, underscore, dot or parentheses for every tag.
@@ -401,7 +405,6 @@ def downloadDeezer(url):
     type, id = deezerTypeId(url)
     if type == 'track':
         getTrack(id)
-
     elif type == 'playlist': # we can't invoke downloadDeezer() again, as used in the else block because playlists have a different tracklisting, not available in JSON format
         info = getJSON(type, id, 'tracks')
         ids = [x["id"] for x in info['data']]
@@ -412,7 +415,6 @@ def downloadDeezer(url):
             playlist = (playlistInfo, playlistTrack)
             getTrack(id, playlist)
             playlistTrack = playlistTrack + 1
-
     else:
         subtype = 'albums' if type == 'artist' else 'tracks'
         info = getJSON(type, id)
@@ -424,60 +426,67 @@ def downloadDeezer(url):
         [downloadDeezer(url) for url in urls]
 
 
-def getSetting(option):
-    ''' Returns a setting from settings.conf. If the setting is not found, return False '''
-    with open('settings.json', 'r') as conf:
-        conf = json.load(conf)
-        try:
-            value = conf[option]
-        except:
-            return False
-    return value
+def getSetting(option, section='DEFAULT'):
+    ''' Returns a setting from settings.ini. '''
+    config = configparser.ConfigParser()
+    config.read('settings.ini')
+    if config.has_option(section,option):
+        return config[section][option]
+    else:
+        return False
 
 
-def setSetting(option, value):
-    ''' Writes an option to the config file '''
-    with open('settings.json', 'r') as conf:
-        confEdit = json.load(conf)
-
-    confEdit[option] = value
-
-    with open('settings.json', 'w') as conf:
-        json.dump(confEdit, conf, indent=4)
-
-
-def autoLogin():
-    ''' Creates autologin setting in settings.conf '''
+def credentials(retry=False):
+    ''' Handles credentials for settings file, for initial setup.
+        If retry is True: the credentials contained a typo and
+        newly entered credentials are written to settings file'''
     email = input("Deezer email: ")
     pswd = getpass.getpass('Deezer password: ')
-    pswd_encoded = base64.b64encode(pswd.encode('utf-8')) # not really secure, but it is recommended to use a throwaway account anyway
-    pswd_encoded = pswd_encoded.decode('utf-8')
-    setSetting('email', email)
-    setSetting('password', pswd_encoded)
-    return email, pswd
+    pswd_enc = pswd.encode().hex() # encode pswd in hex as a small security measure, not really safe.
+    if retry:
+        config = configparser.ConfigParser()
+        config.read('settings.ini')
+        config.set('DEFAULT', 'email', email)
+        config.set('DEFAULT', 'password', pswd_enc)
+        with open('settings.ini', 'w') as configfile:
+            config.write(configfile)
+        return email, pswd
+    else:
+        return email, pswd_enc
 
 
 def genSettingsconf():
-    ''' Generates a settings file containing the download path,
-        playlist download path, song quality, username and password.  '''
+    ''' Generates a settings file containing the download path, playlist download path,
+        song quality, username and password, among other things.  '''
     print("Settings file not found. Generating the file...")
-    with open("settings.json", 'w') as conf:
-        dict = {}
-        json.dump(json.loads('{}'), conf)
+    quality = 0
+    while 1 > quality or 4 < quality:
+        try:
+            print("Select download quality:\n1) Flac 1411 kbps\n2) MP3 320 kbps\n3) Mp3 256 kbps\n4) MP3 128 kbps")
+            quality = int(input("Choice: "))
+        except ValueError:
+            print("Please enter a quality setting\n")
+    email, pswd = credentials()
+    config = configparser.ConfigParser()
+    config['DEFAULT'] = {
+            'naming template':'downloads/<Album Artist>/(<Year>) - <Album>/<Disc#>-<Track#> - <Title>',
+            'playlist naming template':'downloads/playlists/<Playlist Title>/<Track#> - <Title>',
+            'quality':quality,
+            'email': email,
+            'password':pswd
+        }
+    while True:
+        embedCovers = input("Embed album art to songs? This will increase the filesize significantly (y/n): ").lower().strip()
+        if embedCovers[0] == 'y':
+            config['DEFAULT']['embed album art'] = 'True'
+            break
+        if embedCovers[0] == 'n':
+            config['DEFAULT']['embed album art'] = 'False'
+            break
 
-    print("Setting up download path...")
-    pathspec = 'downloads/%ALBUM ARTIST%/(%YEAR%) - %ALBUM%/%DISC%-%TRACK% - %TITLE%'
-    setSetting('path specification', pathspec)
-    print("Setting up playlist download path...")
-    pathspec = 'downloads/playlists/%PLAYLIST TITLE%/%TRACK% - %TITLE%'
-    setSetting('playlist path specification', pathspec)
-
-    print("Select download quality:\n1) Flac 1411 kbps\n2) MP3 320 kbps\n3) Mp3 256 kbps\n4) MP3 128 kbps")
-    quality = input("Choice: ")
-
-    setSetting('quality', quality)
-    autoLogin()
-    print("If you wish to edit any of these settings, you can do so now in settings.json. See the README for more details.")
+    with open('settings.ini', 'w') as configfile:
+        config.write(configfile)
+    print("If you wish to edit any of these settings, you can do so in settings.ini. See the README for more details.")
 
 
 def singleDownload(link):
@@ -500,21 +509,12 @@ def batchDownload(queueFile):
 
 
 def menu():
-    if not os.path.isfile("settings.json"):
+    if not os.path.isfile("settings.ini"):
         genSettingsconf()
-
-    email = getSetting('email')
-    pswd = getSetting('password')
-    if not email or not pswd:
-        print('No email or password entry found.')
-        email, pswd = autoLogin()
-    else:
-        try:
-            pswd = base64.b64decode(pswd).decode('utf-8')
-        except:
-            print('Could not decode password.')
-            autoLogin()
-    initDeezerApi(email, pswd) # if the login fails with these credentials, autoLogin() is called again
+    if not initDeezerApi(getSetting('email'), bytearray.fromhex(getSetting('password')).decode()): #decode because pswd is encoded in hex in the settings file
+        bool = False
+        while not bool:
+            bool = initDeezerApi(*credentials(retry=True))
 
     while True:
         print("Select download mode\n1) Single link\n2) All links (Download all links from downloads.txt, one link per line)")
@@ -531,7 +531,6 @@ def menu():
             print("Invalid option.\n")
 
 if __name__ == '__main__':
-    print("Thank you for using Deezpy.\nPlease consider supporting the artists!\n")
+    print("Thank you for using Deezpy.\nPlease consider supporting the artists!")
     menu()
-
 
