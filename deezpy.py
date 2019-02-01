@@ -23,8 +23,6 @@ import json
 import os
 import re
 import sys
-from collections import defaultdict
-from functools import partial
 
 # not in standard library:
 import requests
@@ -87,12 +85,12 @@ def initDeezerApi(email, pswd):
 
     # Login returns 'success' if it was a successful login, login is not successful if it returns 200 and credentials is called again
     if login.text == "success":
-        print("Login successful\n")
+        print("Login successful")
     elif login.status_code == 200:
         print("\nLogin failed, wrong Deezer credentials.\nFacebook and family accounts are not supported. If you use one, please create a new account.\n")
         return False
     else:
-        print("Error logging in. Error code:"+login.status_code)
+        print("Error logging in. Error code: "+login.status_code)
         exit()
 
     req = requests_retry_session(session=s).post(
@@ -323,28 +321,43 @@ def deezerTypeId(url):
     return url.split('/')[-2:]
 
 
+def resumeDownload(url, filesize):
+    resume_header = {'Range': 'bytes=%d-' % filesize}
+    return requests_retry_session(session=s).get(url, headers=resume_header, stream=True)
+
+
 def downloadTrack(filenameFull, privateInfo, quality):
     filename, file_extension = os.path.splitext(filenameFull)
-    # Stream file
-    print("Dowloading " + filenameFull + "...")
-    url = getTrackDownloadUrl(privateInfo, quality)
-    r = requests_retry_session(session=s).get(url, stream = True)
     bfKey = getBlowfishKey(privateInfo['SNG_ID'])
+    url = getTrackDownloadUrl(privateInfo, quality)
+
+    if os.path.isfile(filename + '.tmp'):
+        print("Resuming download: " + filenameFull + "...")
+        filesize = os.stat(filename + '.tmp').st_size # get the size of file already written to disk
+        filesize = filesize - (filesize%2048) # make sure that filesize is a multiple of 2048, it can be seamlessly decrypted now
+        i = filesize/2048
+        r = resumeDownload(url, filesize)
+    else:
+        print("Downloading: " + filenameFull + "...")
+        filesize = 0
+        i = 0
+        r = requests_retry_session(session=s).get(url, stream = True)
 
     # Decrypt content and write to file
-    with open(filename + '.tmp', 'wb') as fd: #tmp file to prevent incomplete music files if the users exits while writing
-        i = 0
+    with open(filename + '.tmp', 'ab') as fd: #tmp file to prevent incomplete music files if the users exits while writing
+        fd.seek(filesize) # jump to end of the file in order to append to it
         # Only every third 2048 byte block is encrypted.
         for chunk in r.iter_content(2048):
-            if i % 3 > 0 or len(chunk) < 2048:
+            if i % 3 > 0:
                 fd.write(chunk)
+            elif len(chunk) < 2048:
+                fd.write(chunk)
+                break
             else:
                 cipher = Cipher(algorithms.Blowfish((bfKey)), modes.CBC(bytes([i for i in range(8)])), default_backend())
                 decryptor = cipher.decryptor()
                 decdata = decryptor.update(chunk) + decryptor.finalize()
                 fd.write(decdata)
-            if len(chunk) < 2048:
-                break
             i += 1
     os.rename(filename+'.tmp', filenameFull)
 
@@ -501,7 +514,7 @@ def batchDownload(queueFile):
     try:
         batchFile = open(queueFile, 'r')
     except IOError:
-        print("No", queueFile, "file found")
+        print("No", queueFile, "file found\n")
     else:
         links = [line.rstrip() for line in batchFile]
         links = list(filter(None, links)) # filters any empty lines
@@ -517,7 +530,7 @@ def menu():
             bool = initDeezerApi(*credentials(retry=True))
 
     while True:
-        print("Select download mode\n1) Single link\n2) All links (Download all links from downloads.txt, one link per line)")
+        print("\nSelect download mode\n1) Single link\n2) All links (Download all links from downloads.txt, one link per line)")
         selectDownloadMode = input("Choice: ")
 
         if selectDownloadMode == '1':
