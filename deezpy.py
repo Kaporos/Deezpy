@@ -77,10 +77,12 @@ def initDeezerApi(email, pswd):
         'X-Requested-With': 'XMLHttpRequest'
         }
     data = {
-        'type'          : 'login',
-        'mail'          : email,
-        'password'      : pswd,
-        'checkFormLogin': res['results']['checkFormLogin']
+        'type'             : 'login',
+        'mail'             : email,
+        'password'         : pswd,
+        'checkFormLogin'   : res['results']['checkFormLogin'],
+        'reCaptchaToken'   : "",
+        'reCaptchaDisabled': 1
         }
     login = requests_retry_session(session=session).post(
         url="https://www.deezer.com/ajax/action.php",
