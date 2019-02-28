@@ -56,7 +56,8 @@ def initDeezerApi(email, pswd):
     ''' Inits the Deezer API and handles user login. Four POST requests
         have to be made. The first three are to log in, the last
         one is to obtain a CSRF token. This function is only called once,
-        at the start of the script. '''
+        at the start of the script.
+    '''
     unofficialApiQueries = {
         'api_version': '1.0',
         'api_token'  : 'null',
@@ -81,7 +82,7 @@ def initDeezerApi(email, pswd):
         'mail'             : email,
         'password'         : pswd,
         'checkFormLogin'   : res['results']['checkFormLogin'],
-        'reCaptchaToken'   : "",
+        'reCaptchaToken'   : '',
         'reCaptchaDisabled': 1
         }
     login = requests_retry_session(session=session).post(
@@ -123,7 +124,7 @@ def initDeezerApi(email, pswd):
 
 
 def privateApi(songId):
-    ''' Get the required info from the unofficial API to decrypt the files '''
+    ''' Get the required info from the unofficial API to decrypt the files.'''
     unofficialApiQueries = {
         'api_version': '1.0',
         'api_token'  : CSRFToken,
@@ -168,7 +169,8 @@ def requests_retry_session(retries=3, backoff_factor=0.3,
 
 def getJSON(type, id, subtype=None):
     ''' Official API. This function is used to download the ID3 tags.
-    Subtype can be 'albums' or 'tracks' '''
+        Subtype can be 'albums' or 'tracks'.
+    '''
     if subtype:
         url = 'https://api.deezer.com/%s/%s/%s?limit=-1' % (type, id, subtype)
     else:
@@ -179,7 +181,8 @@ def getJSON(type, id, subtype=None):
 
 def getCoverArt(url, filename):
     ''' Retrieves the cover art from the official API,
-        downloads it to the download folder '''
+        downloads it to the download folder.
+    '''
     path = os.path.dirname(filename)
     imageFile = path + '/cover' + '.png'
     if not os.path.isdir(path):
@@ -195,7 +198,7 @@ def getCoverArt(url, filename):
 
 
 def writeTags(filenameFull, trackInfo, albInfo):
-    ''' Function to write tags to the file, be it FLAC or MP3 '''
+    ''' Function to write tags to the file, be it FLAC or MP3.'''
     # retrieve tags
     try:
         genre = albInfo['genres']['data'][0]['name']
@@ -251,7 +254,8 @@ def writeTags(filenameFull, trackInfo, albInfo):
 # https://gist.github.com/bgusach/a967e0587d6e01e889fd1d776c5f3729
 def multireplace(string, replacements):
     ''' Given a string and a replacement map,
-    it returns the replaced string. '''
+        it returns the replaced string.
+    '''
     # Sorts the dict so that longer ones first to keep shorter substrings
     # from matching where the longer ones should take place
     substrs = sorted(replacements, key=len, reverse=True)
@@ -262,6 +266,7 @@ def multireplace(string, replacements):
 
 
 def nameFile(trackInfo, albInfo, playlistInfo=False):
+    ''' Names a file according to a template defined in settings.ini.'''
     # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
         pathspec = getSetting('playlist naming template')
@@ -294,7 +299,8 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
 
 def getTrackDownloadUrl(data, quality):
     ''' Calculates the deezer download URL from
-    a given MD5_origin, song_id and media_version '''
+        a given MD5_origin, song_id and media_version.
+    '''
     step1 = '¤'.join((data['MD5_ORIGIN'],
                       quality, data['SNG_ID'],
                       data['MEDIA_VERSION']))
@@ -314,7 +320,7 @@ def getTrackDownloadUrl(data, quality):
 
 
 def deezerTypeId(url):
-    ''' Returns type ID from a URL'''
+    ''' Checks if url is valid and then returns type ID.'''
     return url.split('/')[-2:]
 
 
@@ -327,6 +333,7 @@ def resumeDownload(url, filesize):
 
 
 def downloadTrack(filenameFull, privateInfo, quality):
+    ''' Download and decrypts a track. Resumes download for tmp files.'''
     filename, file_extension = os.path.splitext(filenameFull)
     bfKey = getBlowfishKey(privateInfo['SNG_ID'])
     url = getTrackDownloadUrl(privateInfo, quality)
@@ -365,7 +372,7 @@ def downloadTrack(filenameFull, privateInfo, quality):
 
 
 def getBlowfishKey(id):
-    ''' Calculates the Blowfish decrypt key for a given SNG_ID '''
+    ''' Calculates the Blowfish decrypt key for a given SNG_ID.'''
     secret = 'g4el58wc0zvf9na1'
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in id]))
@@ -377,7 +384,8 @@ def getBlowfishKey(id):
 
 def getTrack(id, playlist=False):
     ''' Calls the necessary functions to download and tag the tracks.
-        Playlist must be a tuple of (playlistInfo, playlistTrack) '''
+        Playlist must be a tuple of (playlistInfo, playlistTrack).
+    '''
     trackInfo = getJSON('track', id)
     if not trackInfo['readable']:
         print("Song", trackInfo['title'], "not available, skipping...")
@@ -435,7 +443,12 @@ def getTrack(id, playlist=False):
 def downloadDeezer(url):
     ''' Extract individual song links from albums and artist pages
         and invokes getTrack(). If it is just a track link,
-        only invoke getTrack() '''
+        only invoke getTrack().
+    '''
+    if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)'
+                    '(playlist|artist|album|track|)\/[0-9]*', url) is None:
+        print('"'+url+'": '+ "not a valid link")
+        return False
     type, id = deezerTypeId(url)
     if type == 'track':
         getTrack(id)
@@ -461,7 +474,7 @@ def downloadDeezer(url):
 
 
 def getSetting(option, section='DEFAULT'):
-    ''' Returns a setting from settings.ini. '''
+    ''' Returns a setting from settings.ini.'''
     config = configparser.ConfigParser()
     config.read('settings.ini')
     try:
@@ -473,7 +486,8 @@ def getSetting(option, section='DEFAULT'):
 def credentials(retry=False):
     ''' Handles credentials for settings file, for initial setup.
         If retry is True: the credentials contained a typo and
-        newly entered credentials are written to settings file'''
+        newly entered credentials are written to settings file.
+    '''
     email = input("Deezer email: ")
     pswd = getpass.getpass('Deezer password: ')
     # Encode pswd in hex. Not safe but prevents from prying eyes in condif file
@@ -493,7 +507,8 @@ def credentials(retry=False):
 def genSettingsconf():
     ''' Generates a settings file containing the download path,
         playlist download path, song quality, username and password,
-        among other things.  '''
+        among other things.
+    '''
     print("Settings file not found. Generating the file...")
     quality = 0
     while 1 > quality or 4 < quality:
@@ -530,23 +545,14 @@ def genSettingsconf():
            "you can do so in settings.ini. See the README for more details."))
 
 
-def singleDownload(link):
-    if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)'
-                    '(playlist|artist|album|track|)\/[0-9]*', link) is None:
-        print("Not a valid link")
-    else:
-        downloadDeezer(link)
-
-
 def batchDownload(queueFile):
-    ''' Fetches links from a txt file '''
+    ''' Fetches links from a txt file.'''
     try:
         batchFile = open(queueFile, 'r')
     except OSError as error:
         print(error)
     else:
         links = [line.rstrip() for line in batchFile]
-        links = list(filter(None, links))  # filters any empty lines
         [downloadDeezer(link) for link in links]
 
 
@@ -568,7 +574,7 @@ def menu():
         if selectDownloadMode == '1':
             while True:
                 link = input("Download link: ")
-                singleDownload(link)
+                downloadDeezer(link)
 
         elif selectDownloadMode == '2':
             batchDownload('downloads.txt')
