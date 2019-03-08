@@ -17,9 +17,7 @@
 
 # standard libraries:
 import configparser
-import getpass
 import hashlib
-import json
 import os
 import re
 import sys
@@ -37,10 +35,10 @@ from requests.packages.urllib3.util.retry import Retry
 
 session = requests.Session()
 userAgent = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/68.0.3440.106 Safari/537.36'
-        )
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/68.0.3440.106 Safari/537.36'
+    )
 httpHeaders = {
         'User-Agent'      : userAgent,
         'Content-Language': 'en-US',
@@ -48,97 +46,57 @@ httpHeaders = {
         'Accept'          : '*/*',
         'Accept-Charset'  : 'utf-8,ISO-8859-1;q=0.7,*;q=0.3',
         'Accept-Language' : 'en-US;q=0.6,en;q=0.4',
-        'Content-Type'    : 'application/json'
+        'Connection'      : 'keep-alive',
         }
+session.headers.update(httpHeaders)
 
 
-def initDeezerApi(email, pswd):
-    ''' Inits the Deezer API and handles user login. Four POST requests
-        have to be made. The first three are to log in, the last
-        one is to obtain a CSRF token. This function is only called once,
-        at the start of the script.
+def apiCall(method, json_req=False):
+    ''' Requests info from the hidden api: gw-light.php.
+        Used for loginUserToken(), getCSRFToken()
+        and privateApi().
     '''
+    api_token = 'null' if method == 'deezer.getUserData' else CSRFToken
     unofficialApiQueries = {
         'api_version': '1.0',
-        'api_token'  : 'null',
+        'api_token'  : api_token,
         'input'      : '3',
-        'method'     : 'deezer.getUserData'
+        'method'     : method
         }
-    req = requests_retry_session(session=session).post(
+    req = requests_retry_session().post(
         url='https://www.deezer.com/ajax/gw-light.php',
         headers=httpHeaders,
-        params=unofficialApiQueries
-        )
-    res = json.loads(req.text)
+        params=unofficialApiQueries,
+        json=json_req
+        ).json()
+    return req
 
-    loginHeaders = {
-        'User-Agent'      : userAgent,
-        'Accept'          : 'application/json, text/javascript, */*; q=0.01',
-        'Content-Type'    : 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest'
-        }
-    data = {
-        'type'             : 'login',
-        'mail'             : email,
-        'password'         : pswd,
-        'checkFormLogin'   : res['results']['checkFormLogin'],
-        'reCaptchaToken'   : '',
-        'reCaptchaDisabled': 1
-        }
-    login = requests_retry_session(session=session).post(
-        url="https://www.deezer.com/ajax/action.php",
-        headers=loginHeaders,
-        data=data,
-        )
-    # Login returns 'success' if it was a successful login,
-    # login is not successful if it returns 200 and credentials is called again
-    if login.text == "success":
-        print("Login successful")
-    elif login.status_code == 200:
-        print(("\nLogin failed, wrong Deezer credentials."
-               "\nFacebook and family accounts are not supported. "
-               "If you use one, please create a new account.\n"))
+def loginUserToken(token):
+    ''' Handles userToken for settings file, for initial setup.
+        If no USER_ID is found, False is returned and thus the
+        cookie arl is wrong. Instructions for obtaining your arl
+        string are in the README.md
+    '''
+    cookies = {'arl': token}
+    session.cookies.update(cookies)
+    req = apiCall('deezer.getUserData')
+    if not req['results']['USER']['USER_ID']:
         return False
     else:
-        print("Error logging in. Error code:", login.status_code)
-        exit()
+        return True
 
-    req = requests_retry_session(session=session).post(
-        url='https://www.deezer.com/ajax/gw-light.php',
-        headers=httpHeaders,
-        params=unofficialApiQueries
-        )
 
-    # A cross-site request forgery token is needed.
-    # It is used as api token in privateApi(id)
-    req = requests_retry_session(session=session).post(
-        url='https://www.deezer.com/ajax/gw-light.php',
-        headers=httpHeaders,
-        params=unofficialApiQueries
-        )
-
-    res = json.loads(req.text)
+def getCSRFToken():
+    ''' A cross-site request forgery token is needed.'''
+    req = apiCall('deezer.getUserData')
     global CSRFToken
-    CSRFToken = res['results']['checkForm']
-    return True
+    CSRFToken = req['results']['checkForm']
 
 
 def privateApi(songId):
     ''' Get the required info from the unofficial API to decrypt the files.'''
-    unofficialApiQueries = {
-        'api_version': '1.0',
-        'api_token'  : CSRFToken,
-        'input'      : '3',
-        'method'     : 'deezer.pageTrack'
-        }
-    req = requests_retry_session(session=session).post(
-        url='https://www.deezer.com/ajax/gw-light.php',
-        headers=httpHeaders,
-        params=unofficialApiQueries,
-        json={'SNG_ID': songId}  # the SNG_ID must be encoded in JSON
-        )
-    res = json.loads(req.text)
-    privateInfo = res['results']['DATA']
+    req = apiCall('deezer.pageTrack', {'SNG_ID': songId})
+    privateInfo = req['results']['DATA']
     if "FALLBACK" in privateInfo:
         # Some songs in a playlist have other IDs than the same song
         # in an album/artist page. These ids from songs in a playlist
@@ -151,8 +109,7 @@ def privateApi(songId):
 
 # https://www.peterbe.com/plog/best-practice-with-retries-with-requests
 def requests_retry_session(retries=3, backoff_factor=0.3,
-                           status_forcelist=(500, 502, 504), session=None):
-    session = session or requests.Session()
+                           status_forcelist=(500, 502, 504)):
     retry = Retry(
         total=retries,
         read=retries,
@@ -175,8 +132,7 @@ def getJSON(type, id, subtype=None):
         url = 'https://api.deezer.com/%s/%s/%s?limit=-1' % (type, id, subtype)
     else:
         url = 'https://api.deezer.com/%s/%s/?limit=-1' % (type, id)
-    r = requests_retry_session(session=session).get(url)
-    return json.loads(r.text)
+    return requests_retry_session().get(url).json()
 
 
 def getCoverArt(url, filename):
@@ -184,7 +140,7 @@ def getCoverArt(url, filename):
         downloads it to the download folder.
     '''
     path = os.path.dirname(filename)
-    imageFile = path + '/cover' + '.png'
+    imageFile = path + '/cover' + '.jpg'
     if not os.path.isdir(path):
         os.makedirs(path)
     if os.path.isfile(imageFile):
@@ -192,7 +148,7 @@ def getCoverArt(url, filename):
             return f.read()
     else:
         with open(imageFile, 'wb') as f:
-            r = requests_retry_session(session=session).get(url)
+            r = requests_retry_session().get(url)
             f.write(r.content)
             return r.content
 
@@ -280,10 +236,13 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
         replacedict = {
             '<Album Artist>' : albInfo['artist']['name'],
             '<Album>'        : trackInfo['album']['title'],
-            '<Year>'         : trackInfo['album']['release_date'],
+            '<Date>'         : trackInfo['album']['release_date'],
+            '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
             '<Track#>'       : '%02d' % trackInfo['track_position'],
             '<Disc#>'        : '%d' % trackInfo['disk_number'],
-            '<Title>'        : trackInfo['title']
+            '<Title>'        : trackInfo['title'],
+            '<Label>'        : albInfo['label'],
+            '<UPC>'          : albInfo['upc']
         }
     for key, val in replacedict.items():
         # Remove anything that is not an alphanumeric (+non-latin chars),
@@ -297,13 +256,15 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
     return filenameFull
 
 
-def getTrackDownloadUrl(data, quality):
+def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
         a given MD5_origin, song_id and media_version.
+        If a user is not logged in, no MD5_origin is
+        found in data.
     '''
-    step1 = '¤'.join((data['MD5_ORIGIN'],
-                      quality, data['SNG_ID'],
-                      data['MEDIA_VERSION']))
+    step1 = '¤'.join((privateInfo['MD5_ORIGIN'],
+                      quality, privateInfo['SNG_ID'],
+                      privateInfo['MEDIA_VERSION']))
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in step1]))
     step2 = m.hexdigest() + '¤' + step1 + '¤'
@@ -314,7 +275,7 @@ def getTrackDownloadUrl(data, quality):
     encryptor = cipher.encryptor()
 
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
-    cdn = data['MD5_ORIGIN'][0]
+    cdn = privateInfo['MD5_ORIGIN'][0]
     url = 'https://e-cdns-proxy-' + cdn + '.dzcdn.net/mobile/1/' + step3
     return url
 
@@ -326,9 +287,9 @@ def deezerTypeId(url):
 
 def resumeDownload(url, filesize):
     resume_header = {'Range': 'bytes=%d-' % filesize}
-    req = requests_retry_session(session=session).get(url,
-                                                    headers=resume_header,
-                                                    stream=True)
+    req = requests_retry_session().get(url,
+                                       headers=resume_header,
+                                       stream=True)
     return req
 
 
@@ -348,7 +309,7 @@ def downloadTrack(filenameFull, privateInfo, quality):
         print("Downloading: " + filenameFull + "...")
         filesize = 0
         i = 0
-        req = requests_retry_session(session=session).get(url, stream=True)
+        req = requests_retry_session().get(url, stream=True)
 
     # Decrypt content and write to file
     with open(filename + '.tmp', 'ab') as fd:
@@ -482,31 +443,17 @@ def getSetting(option, section='DEFAULT'):
     except KeyError:
         return ''
 
-
-def credentials(retry=False):
-    ''' Handles credentials for settings file, for initial setup.
-        If retry is True: the credentials contained a typo and
-        newly entered credentials are written to settings file.
-    '''
-    email = input("Deezer email: ")
-    pswd = getpass.getpass('Deezer password: ')
-    # Encode pswd in hex. Not safe but prevents from prying eyes in condif file
-    pswd_enc = pswd.encode().hex()
-    if retry:
-        config = configparser.ConfigParser()
-        config.read('settings.ini')
-        config.set('DEFAULT', 'email', email)
-        config.set('DEFAULT', 'password', pswd_enc)
-        with open('settings.ini', 'w') as configfile:
-            config.write(configfile)
-        return email, pswd
-    else:
-        return email, pswd_enc
+def setSetting(option, var, section='DEFAULT'):
+    config = configparser.ConfigParser()
+    config.read('settings.ini')
+    config.set('DEFAULT', option, var)
+    with open('settings.ini', 'w') as configfile:
+        config.write(configfile)
 
 
 def genSettingsconf():
     ''' Generates a settings file containing the download path,
-        playlist download path, song quality, username and password,
+        playlist download path, song quality, userToken,
         among other things.
     '''
     print("Settings file not found. Generating the file...")
@@ -519,24 +466,24 @@ def genSettingsconf():
             quality = int(input("Choice: "))
         except ValueError:
             print("Please enter a quality setting\n")
-    email, pswd = credentials()
+
+    userToken = input("Deezer userToken: ")
     config = configparser.ConfigParser()
     config['DEFAULT'] = {
         'naming template'         : 'downloads/<Album Artist>/(<Year>) - <Album>/<Disc#>-<Track#> - <Title>',
         'playlist naming template': 'downloads/playlists/<Playlist Title>/<Track#> - <Title>',
         'quality'                 : quality,
-        'email'                   : email,
-        'password'                : pswd
+        'userToken'               : userToken
         }
     while True:
         embedCovers = input(("Embed album art to songs? "
                              "This will increase the filesize significantly "
-                             "(y/n): ")).lower().strip()
-        if embedCovers[0] == 'y':
-            config['DEFAULT']['embed album art'] = 'True'
-            break
-        if embedCovers[0] == 'n':
+                             "(y/N): ")).lower().strip()
+        if not embedCovers or embedCovers[0] == 'n':
             config['DEFAULT']['embed album art'] = 'False'
+            break
+        elif embedCovers[0] == 'y':
+            config['DEFAULT']['embed album art'] = 'True'
             break
 
     with open('settings.ini', 'w') as configfile:
@@ -559,12 +506,14 @@ def batchDownload(queueFile):
 def menu():
     if not os.path.isfile("settings.ini"):
         genSettingsconf()
-    if not initDeezerApi(getSetting('email'),
-                         bytearray.fromhex(getSetting('password')).decode()):
-        bool = False
-        while not bool:
-            bool = initDeezerApi(*credentials(retry=True))
-
+    bool = loginUserToken(getSetting('userToken'))
+    while not bool:
+        userToken = input(("Not a valid userToken or the token has expired.\n"
+                           "Please enter a new Deezer userToken:"))
+        bool = loginUserToken(userToken)
+        if bool:
+            setSetting('userToken', userToken)
+    getCSRFToken()
     while True:
         print(("\nSelect download mode\n1) Single link\n"
                "2) All links (Download all links from downloads.txt,"

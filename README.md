@@ -11,7 +11,22 @@ After this, you can just download and run the script like any other Python scrip
 Deezpy generates the download directories and files and a `settings.ini` file in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. Beyond these, no other config files or temporary files are created.
 
 ## Logging in
-Deezpy needs to login to Deezer to function properly. Upon the first start, Deezpy promps you to login. It is recommended to make a throwaway account on the Deezer website. Deezpy does not support Facebook or family accounts. Deezpy saves your Deezer password in the settings file as a hex encoded string. **This NOT encryption! Anyone that has access to your `settings.ini` file could decode and retrieve your password.**
+Deezpy needs to login to Deezer to function properly. Upon the first start, Deezpy promps you to give a userToken.
+
+### Instruction to obtain your userToken
+The userToken is obtained by logging in to the Deezer website. The next steps can differ per browser.
+
+#### Chrome
+1. Press F12
+2. Click Application
+3. In the left sidebar, click Cookies and then `https://www.deezer.com`
+4. In the table, in the row `arl` copy the Value
+
+#### Firefox
+1. Press F12
+2. Go to storage
+3. On the left side click under Cookies click `https://www.deezer.com`
+4. In the table, copy the Value of the row with the Name `arl`
 
 ## Downloading files
 You can choose between two options, download from a single link or batch download links via `downloads.txt`. `downloads.txt` must be in the same directory as `deezpy.py`, with one link per line.
@@ -30,10 +45,13 @@ There are many options available for the path specification.
 For album tracks:
 - Album Artist
 - Album
+- Date
 - Year
 - Track#
 - Disc#
 - Title
+- Label
+- UPC
 
 For playlists:
 - Playlist Title
@@ -44,7 +62,7 @@ You can modify these to your liking by editing the settings file. The forward sl
 
 ## Thank you
 Thanks to the author of a script on codegists.com, where I based my script on. That page is now gone, though.
-Also thanks to DeezloaderRemix, it served as a great reference, especially for writing the initDeezerApi() function.
+Special thanks to the team maintaining DeezloaderRemix, without their code Deezpy would not have been here today.
 
 ## Disclaimer
 - We, Deezpy contributors, do not call to commit crimes.
