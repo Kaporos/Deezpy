@@ -394,8 +394,6 @@ def getTrack(id, playlist=False):
     if quality == '9':
         ext = '.flac'
     else:
-        quality is None
-    if not quality:
         print("Song", trackInfo['title'], "not available, skipping...")
         return False
 
@@ -465,8 +463,10 @@ def getSetting(option, section='DEFAULT'):
         return ''
 
 
-def setSetting(option,section='DEFAULT',question=False):
-    ''' Handles simple y/N questions in genSettingsconf().'''
+def setSetting(option,var,section='DEFAULT',question=False):
+    ''' Adds options to settings.ini.
+        If question: handle simple y/N questions in genSettingsconf().
+    '''
     config = configparser.ConfigParser()
     config.read('settings.ini')
     if question:
