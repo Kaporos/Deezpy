@@ -8,7 +8,7 @@ You can install them with: `pip install requests cryptography mutagen`
 
 After this, you can just download and run the script like any other Python script.
 
-Deezpy generates the download directories and files and a `settings.ini` file in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. Beyond these, no other config files or temporary files are created.
+Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this is in `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
 
 ## Logging in
 Deezpy needs to login to Deezer to function properly. Upon the first start, Deezpy promps you to give a userToken.
@@ -32,9 +32,9 @@ The userToken is obtained by logging in to the Deezer website. The next steps ca
 You can choose between two options, download from a single link or batch download links via `downloads.txt`. `downloads.txt` must be in the same directory as `deezpy.py`, with one link per line.
 
 ### Download quality
-When starting Deezpy for the first time, you can choose the download quality. This setting is saved in `settings.ini`. If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.
+When starting Deezpy for the first time, you can choose the download quality. This setting is saved in `deezpyrc`. If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.
 
-If you want to change the quality setting, you can edit the `settings.ini` file. The quality settings are as follows:
+If you want to change the quality setting, you can edit the `deezpyrc` file. The quality settings are as follows:
 - "1" = FLAC 1411 kbps
 - "2" = MP3 320 kbps
 - "3" = MP3 256 kbps

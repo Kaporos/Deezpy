@@ -21,6 +21,7 @@ import hashlib
 import os
 import re
 import sys
+import platform
 
 # third party libraries:
 import mutagen
@@ -72,7 +73,7 @@ def apiCall(method, json_req=False):
 
 
 def loginUserToken(token):
-    ''' Handles userToken for settings file, for initial setup.
+    ''' Handles userToken for deezpyrc file, for initial setup.
         If no USER_ID is found, False is returned and thus the
         cookie arl is wrong. Instructions for obtaining your arl
         string are in the README.md
@@ -252,7 +253,7 @@ def multireplace(string, replacements):
 
 
 def nameFile(trackInfo, albInfo, playlistInfo=False):
-    ''' Names a file according to a template defined in settings.ini.'''
+    ''' Names a file according to a template defined in deezpyrc.'''
     # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
         pathspec = getSetting('playlist naming template')
@@ -417,7 +418,7 @@ def getTrack(id, playlist=False):
         bfKey = getBlowfishKey(privateInfo['SNG_ID'])
         downloadTrack(filename, ext, decryptedUrl, bfKey)
         writeTags(filename, ext, trackInfo, albInfo)
-        if getSetting('download lyrics'):
+        if getSetting('download lyrics') == 'True'
             getLyrics(id, filename)
         print("Done!")
 
@@ -454,10 +455,28 @@ def downloadDeezer(url):
         [downloadDeezer(url) for url in urls]
 
 
+def platformSettingsPath():
+    osPlatform = platform.system()
+    if osPlatform == 'Linux' or osPlatform == 'Darwin':
+       platformPath = os.path.expanduser('~')+'/.config/deezpyrc'
+    elif osPlatform == 'Windows':
+        platformPath = os.getenv('APPDATA')+'/deezpyrc'
+    return platformPath
+
+
+def checkSettingsFile():
+    if os.path.isfile(platformSettingsPath()):
+        return platformSettingsPath()
+    elif os.path.isfile('deezpyrc'):
+        return 'deezpyrc'
+    else:
+        return None
+
+
 def getSetting(option, section='DEFAULT'):
-    ''' Returns a setting from settings.ini.'''
+    ''' Returns a setting from deezpyrc.'''
     config = configparser.ConfigParser()
-    config.read('settings.ini')
+    config.read(checkSettingsFile())
     try:
         return config[section][option]
     except KeyError:
@@ -465,11 +484,11 @@ def getSetting(option, section='DEFAULT'):
 
 
 def setSetting(option,var=False,section='DEFAULT',question=False):
-    ''' Adds options to settings.ini.
+    ''' Adds options to deezpyrc.
         If question: handle simple y/N questions in genSettingsconf().
     '''
     config = configparser.ConfigParser()
-    config.read('settings.ini')
+    config.read(checkSettingsFile())
     if question:
         while True:
             userOpin = input(question).lower().strip()
@@ -480,7 +499,7 @@ def setSetting(option,var=False,section='DEFAULT',question=False):
                 var = 'True'
                 break
     config.set(section, option, var)
-    with open('settings.ini', 'w') as configfile:
+    with open(checkSettingsFile(), 'w') as configfile:
         config.write(configfile)
 
 
@@ -490,10 +509,24 @@ def genSettingsconf():
         among other things.
     '''
     print("Settings file not found. Generating the file...")
+    pathQuestion = 0
+    while 1 > pathQuestion or 2 < pathQuestion:
+        try:
+            print(("\nDo you want to create the settings file in\n1): "
+                    platformSettingsPath()
+                   "\n2): In the folder you've ran Deezpy from?"))
+            pathQuestion = int(input("Choice: "))
+        except ValueError:
+            print("Please enter 1 or 2")
+    if pathQuestion == 1:
+        settingsPath = platformSettingsPath()
+    else:
+        settingsPath = 'deezpyrc'
+
     quality = 0
     while 1 > quality or 4 < quality:
         try:
-            print(("Select download quality:"
+            print(("\nSelect download quality:"
                    "\n1) Flac 1411 kbps\n2) MP3 320 kbps\n"
                    "3) Mp3 256 kbps\n4) MP3 128 kbps"))
             quality = int(input("Choice: "))
@@ -512,12 +545,12 @@ def genSettingsconf():
                    "This will increase the filesize significantly "
                    "(y/N): ")
     downloadLyrics = "Download lyrics files? (y/N): "
-    with open('settings.ini', 'w') as configfile:
+    with open(settingsPath, 'w') as configfile:
         config.write(configfile)
     setSetting('embed album art', question=embedCovers)
     setSetting('download lyrics', question=downloadLyrics)
     print(("If you wish to edit any of these settings, "
-           "you can do so in settings.ini. See the README for more details.\n"))
+           "you can do so in deezpyrc. See the README for more details.\n"))
 
 
 def batchDownload(queueFile):
@@ -532,7 +565,7 @@ def batchDownload(queueFile):
 
 
 def menu():
-    if not os.path.isfile("settings.ini"):
+    if not checkSettingsFile():
         genSettingsconf()
     bool = loginUserToken(getSetting('userToken'))
     while not bool:
