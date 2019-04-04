@@ -512,9 +512,9 @@ def genSettingsconf():
     pathQuestion = 0
     while 1 > pathQuestion or 2 < pathQuestion:
         try:
-            print(("\nDo you want to create the settings file in\n1): ",
+            print("\nDo you want to create the settings file in\n1):",
                     platformSettingsPath(),
-                   "\n2): In the folder you've ran Deezpy from?"))
+                   "\n2): In the folder you've ran Deezpy from")
             pathQuestion = int(input("Choice: "))
         except ValueError:
             print("Please enter 1 or 2")
