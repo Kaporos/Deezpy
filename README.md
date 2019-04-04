@@ -16,7 +16,7 @@ Deezpy needs to login to Deezer to function properly. Upon the first start, Deez
 ### Instruction to obtain your userToken
 The userToken is obtained by logging in to the Deezer website. The next steps can differ per browser.
 
-#### Chrome
+#### Chrom/ium
 1. Press F12
 2. Click Application
 3. In the left sidebar, click Cookies and then `https://www.deezer.com`
