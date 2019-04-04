@@ -418,7 +418,7 @@ def getTrack(id, playlist=False):
         bfKey = getBlowfishKey(privateInfo['SNG_ID'])
         downloadTrack(filename, ext, decryptedUrl, bfKey)
         writeTags(filename, ext, trackInfo, albInfo)
-        if getSetting('download lyrics') == 'True'
+        if getSetting('download lyrics') == 'True':
             getLyrics(id, filename)
         print("Done!")
 
@@ -512,8 +512,8 @@ def genSettingsconf():
     pathQuestion = 0
     while 1 > pathQuestion or 2 < pathQuestion:
         try:
-            print(("\nDo you want to create the settings file in\n1): "
-                    platformSettingsPath()
+            print(("\nDo you want to create the settings file in\n1): ",
+                    platformSettingsPath(),
                    "\n2): In the folder you've ran Deezpy from?"))
             pathQuestion = int(input("Choice: "))
         except ValueError:
