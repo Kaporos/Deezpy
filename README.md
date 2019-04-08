@@ -1,6 +1,6 @@
 # Deezpy - A Deezer track downloader for the commandline
 Deezpy is a Deezer track downloader and decrypter, written in Python 3.
-It is made to be a minimal and open Deezer downloader, with no obfuscated code. Deezpy is commandline only so it is very lightweight, only around 500 lines of code. And there is still room for improvement.
+It is made to be a minimal and open Deezer downloader, with no obfuscated code. Deezpy is commandline only so it is very lightweight, only around 600 lines of code. And there is still room for improvement.
 
 ## Installation
 To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography` and `mutagen`.
@@ -13,7 +13,7 @@ Deezpy searches for a `deezpyrc` configuration file in the relevant config folde
 ## Logging in
 Deezpy needs to login to Deezer to function properly. Upon the first start, Deezpy promps you to give a userToken.
 
-### Instruction to obtain your userToken
+### Instructions to obtain your userToken
 The userToken is obtained by logging in to the Deezer website. The next steps can differ per browser.
 
 #### Chrom/ium
@@ -29,7 +29,8 @@ The userToken is obtained by logging in to the Deezer website. The next steps ca
 4. In the table, copy the Value of the row with the Name `arl`
 
 ## Downloading files
-You can choose between two options, download from a single link or batch download links via `downloads.txt`. `downloads.txt` must be in the same directory as `deezpy.py`, with one link per line.
+You can choose between three options: download a single link, batch download links via `downloads.txt` or interactive mode, where you can search for tracks, albums or artists.
+For batch downloads, `downloads.txt` must be in the same directory as `deezpy.py`, with one link per line.
 
 ### Download quality
 When starting Deezpy for the first time, you can choose the download quality. This setting is saved in `deezpyrc`. If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.
