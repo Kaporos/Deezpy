@@ -134,12 +134,12 @@ def getJSON(type, id, subtype=""):
 
 
 def getCoverArt(url, filename, size):
-    ''' Retrieves the cover art from the official API,
-        downloads it to the download folder.
+    ''' Retrieves the coverart/playlist image from the official API,
+        downloads it to the download folder and returns it.
     '''
-    url = f'{url}{size}x{size}.png'
+    url = f'{url}/{size}x{size}.png'
     path = os.path.dirname(filename)
-    imageFile = path + '/cover' + '.png'
+    imageFile = f'{path}/cover.png'
     if not os.path.isdir(path):
         os.makedirs(path)
     if os.path.isfile(imageFile):
@@ -307,7 +307,7 @@ def getTrackDownloadUrl(privateInfo, quality):
     encryptor = cipher.encryptor()
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
     cdn = privateInfo['MD5_ORIGIN'][0]
-    decryptedUrl = 'https://e-cdns-proxy-' + cdn + '.dzcdn.net/mobile/1/' + step3
+    decryptedUrl = f'https://e-cdns-proxy-{cdn}.dzcdn.net/mobile/1/{step3}'
     return decryptedUrl
 
 
@@ -327,14 +327,14 @@ def deezerTypeId(url):
 def downloadTrack(filename, ext, url, bfKey):
     ''' Download and decrypts a track. Resumes download for tmp files.'''
     if os.path.isfile(filename + '.tmp'):
-        print("Resuming download: " + filename + ext + "...")
+        print(f"Resuming download: {filename}{ext}...")
         filesize = os.stat(filename + '.tmp').st_size  # size downloaded file
         # reduce filesize to a multiple of 2048 for seamless decryption
         filesize = filesize - (filesize % 2048)
         i = filesize/2048
         req = resumeDownload(url, filesize)
     else:
-        print("Downloading: " + filename + ext + "...")
+        print(f"Downloading: {filename}{ext}...")
         filesize = 0
         i = 0
         req = requests_retry_session().get(url, stream=True)
@@ -377,7 +377,7 @@ def getTrack(id, playlist=False):
     '''
     trackInfo = getJSON('track', id)
     if not trackInfo['readable']:
-        print("Song", trackInfo['title'], "not available, skipping...")
+        print(f"Song {trackInfo['title']} not available, skipping...")
         return False
     privateInfo = privateApi(id)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
@@ -391,13 +391,12 @@ def getTrack(id, playlist=False):
         if int(privateInfo[filesize[i]]) != 0:
             quality = qualities[i]
             break
-
     if quality == '9':
         ext = '.flac'
     elif quality == '5' or quality == '3' or quality == '1':
         ext = '.mp3'
     else:
-        print("Song", trackInfo['title'], "not available, skipping...")
+        print(f"Song {trackInfo['title']} not available, skipping...")
         return False
 
     if playlist:  # edit some info to get playlist suitable tags
@@ -410,7 +409,7 @@ def getTrack(id, playlist=False):
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     filename = nameFile(trackInfo, albInfo, playlist)
     if os.path.isfile(filename + ext):
-        print(filename + ext, "already exists!")
+        print(f"{filename}{ext} already exists!")
     else:
         dir = os.path.dirname(filename + ext)
         if not os.path.isdir(dir):
@@ -431,7 +430,7 @@ def downloadDeezer(url):
     '''
     if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)'
                     '(playlist|artist|album|track|)\/[0-9]*', url) is None:
-        print('"' + url + '": ' + "not a valid link")
+        print(f'"{url}": not a valid link')
         return False
     type, id = deezerTypeId(url)
     if type == 'track':
@@ -450,7 +449,7 @@ def downloadDeezer(url):
         subtype = 'albums' if type == 'artist' else 'tracks'
         info = getJSON(type, id)
         if type == 'album':
-            print('\n' + info['artist']['name'], '-', info['title'])
+            print(f"\n{info['artist']['name']} - {info['title']}")
         info = getJSON(type, id, subtype)
         urls = [x["link"] for x in info['data']]
         [downloadDeezer(url) for url in urls]
