@@ -564,6 +564,74 @@ def batchDownload(queueFile):
         [downloadDeezer(link) for link in links]
 
 
+def interactiveMode():
+    ''' Launches interactive download mode
+        Finds track, album, and artist items
+        Performs item discovery through search
+        and download from retrieved item urls
+    '''
+    print("\nSelect download type\n1) Track\n2) Album\n3) Artist")
+    itemLut = {
+        "1": {
+            "selector": "TRACK",
+            "string": "{0}) {1} - {2} / {3}",
+            "tuple": lambda i, item : (str(i+1), item["SNG_TITLE"], item["ART_NAME"], item["ALB_TITLE"]),
+            "type": "song",
+            "url": lambda item : "https://www.deezer.com/en/track/" + item["SNG_ID"]
+        },
+        "2": {
+            "selector": "ALBUM",
+            "string": "{0}) {1} - {2}",
+            "tuple": lambda i, item : (str(i+1), item["ALB_TITLE"], item["ART_NAME"]),
+            "type": "album",
+            "url": lambda item : "https://www.deezer.com/en/album/" + item["ALB_ID"]
+        },
+        "3": {
+            "selector": "ARTIST",
+            "string": "{0}) {1}",
+            "tuple": lambda i, item : (str(i+1), item["ART_NAME"]),
+            "type": "artist",
+            "url": lambda item : "https://www.deezer.com/en/artist/" + item["ART_ID"]
+        }
+    }
+    items = []
+    itemType = input("Choice: ")
+    if itemType not in [str(n) for n in range(1, 4)]:
+        print("Invalid option.")
+        return
+    maxResults = 10
+    searchTerm = input("\nSearch: ")
+    if searchTerm == "":
+        print("Invalid query.")
+        return
+    res = apiCall("deezer.suggest", {"NB": maxResults, "QUERY": searchTerm, "TYPES": {
+        "ALBUM": True,
+        "ARTIST": True,
+        "TRACK": True
+    }})
+    if len(res["TOP_RESULT"]) > 0 and res["TOP_RESULT"][0]["__TYPE__"] == itemLut[itemType]["type"]:
+        items += res["TOP_RESULT"]
+        if len(res[itemLut[itemType]["selector"]]) > maxResults-1:
+            res[itemLut[itemType]["selector"]].pop()
+    items += res[itemLut[itemType]["selector"]]
+    if len(items) == 0:
+        print("No items found.")
+        return
+    for i in range(len(items)):
+        try:
+            item = items[i]
+            print(itemLut[itemType]["string"].format(*itemLut[itemType]["tuple"](i, item)))
+        except:
+            continue
+    itemChoice = input("Choice: ")
+    if itemChoice not in [str(n) for n in range(1, len(items)+1)]:
+        print("Invalid option.")
+        return
+    itemIndex = int(itemChoice)-1
+    itemUrl = itemLut[itemType]["url"](items[itemIndex])
+    downloadDeezer(itemUrl)
+
+
 def menu():
     if not checkSettingsFile():
         genSettingsconf()
@@ -578,7 +646,7 @@ def menu():
     while True:
         print(("\nSelect download mode\n1) Single link\n"
                "2) All links (Download all links from downloads.txt,"
-               "one link per line)"))
+               "one link per line)\n3) Interactive"))
         selectDownloadMode = input("Choice: ")
 
         if selectDownloadMode == '1':
@@ -588,6 +656,10 @@ def menu():
 
         elif selectDownloadMode == '2':
             batchDownload('downloads.txt')
+
+        elif selectDownloadMode == '3':
+            interactiveMode()
+
         else:
             print("Invalid option.\n")
 
