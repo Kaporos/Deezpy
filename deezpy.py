@@ -125,23 +125,21 @@ def requests_retry_session(retries=3, backoff_factor=0.3,
     return session
 
 
-def getJSON(type, id, subtype=None):
+def getJSON(type, id, subtype=""):
     ''' Official API. This function is used to download the ID3 tags.
         Subtype can be 'albums' or 'tracks'.
     '''
-    if subtype:
-        url = 'https://api.deezer.com/%s/%s/%s?limit=-1' % (type, id, subtype)
-    else:
-        url = 'https://api.deezer.com/%s/%s/?limit=-1' % (type, id)
+    url = f'https://api.deezer.com/{type}/{id}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
 
-def getCoverArt(url, filename):
+def getCoverArt(url, filename, size):
     ''' Retrieves the cover art from the official API,
         downloads it to the download folder.
     '''
+    url = f'{url}{size}x{size}.png'
     path = os.path.dirname(filename)
-    imageFile = path + '/cover' + '.jpg'
+    imageFile = path + '/cover' + '.png'
     if not os.path.isdir(path):
         os.makedirs(path)
     if os.path.isfile(imageFile):
@@ -205,8 +203,10 @@ def writeTags(filename, ext, trackInfo, albInfo):
         'label'       : albInfo['label'],
         'genre'       : genre
         }
-    # Download and load the image:
-    image = getCoverArt(trackInfo['album']['cover_xl'], filename)
+    # Download and load the image
+    # cover_xl returns 1000px jpg link, but 1500px png is available, so we modify url
+    url = trackInfo['album']['cover_xl'].rsplit('/',1)[0]
+    image = getCoverArt(url, filename, 1500)
     if ext == '.flac':
         handle = mutagen.File(filename+ext)
         handle.delete()  # delete pre-existing tags
@@ -386,6 +386,7 @@ def getTrack(id, playlist=False):
     filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320','FILESIZE_MP3_256',
                 'FILESIZE_MP3_128']#, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
     qualities = ['9','3','5','1'] #,'',''] # filesize[i] corresponds with qualities[i]
+    quality = 0
     for i in range(qualitySetting, len(qualities)-1):
         if int(privateInfo[filesize[i]]) != 0:
             quality = qualities[i]
