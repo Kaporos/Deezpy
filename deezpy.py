@@ -208,7 +208,12 @@ def writeTags(filename, ext, trackInfo, albInfo):
     url = trackInfo['album']['cover_xl'].rsplit('/',1)[0]
     image = getCoverArt(url, filename, 1500)
     if ext == '.flac':
-        handle = mutagen.File(filename+ext)
+        try:
+            handle = mutagen.File(filename+ext)
+        except mutagen.flac.FLACNoHeaderError as error:
+            print(error)
+            os.remove(filename+ext)
+            return False
         handle.delete()  # delete pre-existing tags
         if getSetting('embed covers') == 'True':
             pic = mutagen.flac.Picture()
@@ -341,10 +346,10 @@ def downloadTrack(filename, ext, url, bfKey):
         if req.headers['Content-length'] == '0':
             print("Empty file, skipping...\n")
             return False
-    # make dirs if they do not exist yet
-    fileDir = os.path.dirname(filename + ext)
-    if not os.path.isdir(fileDir):
-        os.makedirs(fileDir)
+        # make dirs if they do not exist yet
+        fileDir = os.path.dirname(filename + ext)
+        if not os.path.isdir(fileDir):
+            os.makedirs(fileDir)
 
     # Decrypt content and write to file
     with open(filename + '.tmp', 'ab') as fd:
