@@ -125,11 +125,11 @@ def requests_retry_session(retries=3, backoff_factor=0.3,
     return session
 
 
-def getJSON(type, id, subtype=""):
+def getJSON(mediaType, mediaId, subtype=""):
     ''' Official API. This function is used to download the ID3 tags.
         Subtype can be 'albums' or 'tracks'.
     '''
-    url = f'https://api.deezer.com/{type}/{id}/{subtype}?limit=-1'
+    url = f'https://api.deezer.com/{mediaType}/{mediaId}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
 
@@ -152,13 +152,13 @@ def getCoverArt(url, filename, size):
             return r.content
 
 
-def getLyrics(id, filename):
+def getLyrics(trackId, filename):
     ''' Recieves (timestamped) lyrics from the unofficial api
         and converts them to a conventional .lrc file.
         If only the unsynced lyrics are found, these are written
         to a .txt file.
     '''
-    req = apiCall('song.getLyrics', {'sng_id': id})
+    req = apiCall('song.getLyrics', {'sng_id': trackId})
     if 'LYRICS_SYNC_JSON' in req: # synced lyrics
         rawLyrics = req['LYRICS_SYNC_JSON']
         ext = '.lrc'
@@ -259,7 +259,7 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
         pathspec = getSetting('playlist naming template')
         replacedict = {
             '<Playlist Title>' : playlistInfo[0]['title'],
-            '<Track#>'         : '%d' % playlistInfo[1],
+            '<Track#>'         : f'{playlistInfo[1]:02d}',
             '<Title>'          : trackInfo['title']
         }
     else:
@@ -269,16 +269,16 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Album>'        : trackInfo['album']['title'],
             '<Date>'         : trackInfo['album']['release_date'],
             '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
-            '<Track#>'       : '%02d' % trackInfo['track_position'],
-            '<Disc#>'        : '%d' % trackInfo['disk_number'],
+            '<Track#>'       : f'{trackInfo["track_position"]:02d}',
+            '<Disc#>'        : f'{trackInfo["disk_number"]:d}',
             '<Title>'        : trackInfo['title'],
             '<Label>'        : albInfo['label'],
             '<UPC>'          : albInfo['upc']
         }
     for key, val in replacedict.items():
         # Remove anything that is not an alphanumeric (+non-latin chars),
-        # space, dash, underscore, dot or parentheses for every tag:
-        val = re.sub(r'(?u)[^-\w.( )]', '', val)
+        # space, dash, underscore, dot or parentheses for every replacedict key
+        val = re.sub(r'(?u)[^-\w.( )]', '_', val)
         # folder dirs and the filename are now max 250 bytes long:
         val = val.encode('utf-8')[:250].decode('utf-8', 'ignore')
         replacedict[key] = val
@@ -338,6 +338,13 @@ def downloadTrack(filename, ext, url, bfKey):
         filesize = 0
         i = 0
         req = requests_retry_session().get(url, stream=True)
+        if req.headers['Content-length'] == '0':
+            print("Empty file, skipping...\n")
+            return False
+    # make dirs if they do not exist yet
+    fileDir = os.path.dirname(filename + ext)
+    if not os.path.isdir(fileDir):
+        os.makedirs(fileDir)
 
     # Decrypt content and write to file
     with open(filename + '.tmp', 'ab') as fd:
@@ -358,28 +365,29 @@ def downloadTrack(filename, ext, url, bfKey):
                 fd.write(decdata)
             i += 1
     os.rename(filename + '.tmp', filename + ext)
+    return True
 
 
-def getBlowfishKey(id):
+def getBlowfishKey(trackId):
     ''' Calculates the Blowfish decrypt key for a given SNG_ID.'''
     secret = 'g4el58wc0zvf9na1'
     m = hashlib.md5()
-    m.update(bytes([ord(x) for x in id]))
+    m.update(bytes([ord(x) for x in trackId]))
     idMd5 = m.hexdigest()
     bfKey = bytes(([(ord(idMd5[i]) ^ ord(idMd5[i+16]) ^ ord(secret[i]))
                   for i in range(16)]))
     return bfKey
 
 
-def getTrack(id, playlist=False):
+def getTrack(trackId, playlist=False):
     ''' Calls the necessary functions to download and tag the tracks.
         Playlist must be a tuple of (playlistInfo, playlistTrack).
     '''
-    trackInfo = getJSON('track', id)
+    trackInfo = getJSON('track', trackId)
     if not trackInfo['readable']:
         print(f"Song {trackInfo['title']} not available, skipping...")
         return False
-    privateInfo = privateApi(id)
+    privateInfo = privateApi(trackId)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
     # if the preferred quality is not available, get the one below etc.
     qualitySetting = int(getSetting("quality")) - 1
@@ -396,7 +404,8 @@ def getTrack(id, playlist=False):
     elif quality == '5' or quality == '3' or quality == '1':
         ext = '.mp3'
     else:
-        print(f"Song {trackInfo['title']} not available, skipping...")
+        print((f"Song {trackInfo['title']} not available, skipping..."
+               "\nMaybe try with a higher quality setting?"))
         return False
 
     if playlist:  # edit some info to get playlist suitable tags
@@ -407,20 +416,19 @@ def getTrack(id, playlist=False):
         trackInfo['disk_number'] = ''
         trackInfo['album']['release_date'] = ''
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
-    filename = nameFile(trackInfo, albInfo, playlist)
-    if os.path.isfile(filename + ext):
-        print(f"{filename}{ext} already exists!")
+    fullFilenamePath = nameFile(trackInfo, albInfo, playlist)
+    if os.path.isfile(fullFilenamePath + ext):
+        print(f"{fullFilenamePath}{ext} already exists!")
     else:
-        dir = os.path.dirname(filename + ext)
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
         decryptedUrl = getTrackDownloadUrl(privateInfo, quality)
         bfKey = getBlowfishKey(privateInfo['SNG_ID'])
-        downloadTrack(filename, ext, decryptedUrl, bfKey)
-        writeTags(filename, ext, trackInfo, albInfo)
-        if getSetting('download lyrics') == 'True':
-            getLyrics(id, filename)
-        print("Done!")
+        if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey):
+            writeTags(fullFilenamePath, ext, trackInfo, albInfo)
+            if getSetting('download lyrics') == 'True':
+                getLyrics(trackId, fullFilenamePath)
+            print("Done!")
+        else:
+            return False
 
 
 def downloadDeezer(url):
@@ -432,25 +440,25 @@ def downloadDeezer(url):
                     '(playlist|artist|album|track|)\/[0-9]*', url) is None:
         print(f'"{url}": not a valid link')
         return False
-    type, id = deezerTypeId(url)
-    if type == 'track':
-        getTrack(id)
+    mediaType, mediaId = deezerTypeId(url)
+    if mediaType == 'track':
+        getTrack(mediaId)
     # we can't invoke downloadDeezer() again, as in the else block because
     # playlists have a different tracklisting, not available in JSON
-    elif type == 'playlist':
-        playlistInfo = getJSON(type, id)
+    elif mediaType == 'playlist':
+        playlistInfo = getJSON(mediaType, mediaId)
         ids = [x["id"] for x in playlistInfo['tracks']['data']]
         playlistTrack = 1
-        for id in ids:
+        for trackId in ids:
             playlist = (playlistInfo, playlistTrack)
-            getTrack(id, playlist)
+            getTrack(trackId, playlist)
             playlistTrack = playlistTrack + 1
     else:
-        subtype = 'albums' if type == 'artist' else 'tracks'
-        info = getJSON(type, id)
-        if type == 'album':
+        subtype = 'albums' if mediaType == 'artist' else 'tracks'
+        info = getJSON(mediaType, mediaId)
+        if mediaType == 'album':
             print(f"\n{info['artist']['name']} - {info['title']}")
-        info = getJSON(type, id, subtype)
+        info = getJSON(mediaType, mediaId, subtype)
         urls = [x["link"] for x in info['data']]
         [downloadDeezer(url) for url in urls]
 
@@ -572,26 +580,28 @@ def interactiveMode():
     '''
     print("\nSelect download type\n1) Track\n2) Album\n3) Artist")
     itemLut = {
-        "1": {
-            "selector": "TRACK",
-            "string": "{0}) {1} - {2} / {3}",
-            "tuple": lambda i, item : (str(i+1), item["SNG_TITLE"], item["ART_NAME"], item["ALB_TITLE"]),
-            "type": "song",
-            "url": lambda item : "https://www.deezer.com/en/track/" + item["SNG_ID"]
+        '1': {
+            'selector': 'TRACK',
+            'string': '{0}) {1} - {2} / {3}',
+            'tuple': lambda i, item : (str(i+1), item['SNG_TITLE'],
+                                       item['ART_NAME'], item['ALB_TITLE']),
+            'type': 'song',
+            'url': lambda item : f'https://www.deezer.com/en/track/{item["SNG_ID"]}'
         },
-        "2": {
-            "selector": "ALBUM",
-            "string": "{0}) {1} - {2}",
-            "tuple": lambda i, item : (str(i+1), item["ALB_TITLE"], item["ART_NAME"]),
-            "type": "album",
-            "url": lambda item : "https://www.deezer.com/en/album/" + item["ALB_ID"]
+        '2': {
+            'selector': 'ALBUM',
+            'string': '{0}) {1} - {2}',
+            'tuple': lambda i, item : (str(i+1), item['ALB_TITLE'],
+                                       item['ART_NAME']),
+            'type': 'album',
+            'url': lambda item : f'https://www.deezer.com/en/album/{item["ALB_ID"]}'
         },
-        "3": {
-            "selector": "ARTIST",
-            "string": "{0}) {1}",
-            "tuple": lambda i, item : (str(i+1), item["ART_NAME"]),
-            "type": "artist",
-            "url": lambda item : "https://www.deezer.com/en/artist/" + item["ART_ID"]
+        '3': {
+            'selector': 'ARTIST',
+            'string': '{0}) {1}',
+            'tuple': lambda i, item : (str(i+1), item['ART_NAME']),
+            'type': 'artist',
+            'url': lambda item : f'https://www.deezer.com/en/artist/{item["ART_ID"]}'
         }
     }
     items = []
@@ -604,23 +614,23 @@ def interactiveMode():
     if searchTerm == "":
         print("Invalid query.")
         return
-    res = apiCall("deezer.suggest", {"NB": maxResults, "QUERY": searchTerm, "TYPES": {
-        "ALBUM": True,
-        "ARTIST": True,
-        "TRACK": True
+    res = apiCall('deezer.suggest', {'NB': maxResults, 'QUERY': searchTerm, 'TYPES': {
+        'ALBUM': True,
+        'ARTIST': True,
+        'TRACK': True
     }})
-    if len(res["TOP_RESULT"]) > 0 and res["TOP_RESULT"][0]["__TYPE__"] == itemLut[itemType]["type"]:
-        items += res["TOP_RESULT"]
-        if len(res[itemLut[itemType]["selector"]]) > maxResults-1:
-            res[itemLut[itemType]["selector"]].pop()
-    items += res[itemLut[itemType]["selector"]]
+    if len(res['TOP_RESULT']) > 0 and res['TOP_RESULT'][0]['__TYPE__'] == itemLut[itemType]['type']:
+        items += res['TOP_RESULT']
+        if len(res[itemLut[itemType]['selector']]) > maxResults-1:
+            res[itemLut[itemType]['selector']].pop()
+    items += res[itemLut[itemType]['selector']]
     if len(items) == 0:
         print("No items found.")
         return
     for i in range(len(items)):
         try:
             item = items[i]
-            print(itemLut[itemType]["string"].format(*itemLut[itemType]["tuple"](i, item)))
+            print(itemLut[itemType]['string'].format(*itemLut[itemType]['tuple'](i, item)))
         except:
             continue
     itemChoice = input("Choice: ")
@@ -628,37 +638,38 @@ def interactiveMode():
         print("Invalid option.")
         return
     itemIndex = int(itemChoice)-1
-    itemUrl = itemLut[itemType]["url"](items[itemIndex])
+    itemUrl = itemLut[itemType]['url'](items[itemIndex])
     downloadDeezer(itemUrl)
 
 
 def menu():
     if not checkSettingsFile():
         genSettingsconf()
-    bool = loginUserToken(getSetting('userToken'))
-    while not bool:
+    loginBool = loginUserToken(getSetting('userToken'))
+    while not loginBool:
         userToken = input(("Not a valid userToken or the token has expired.\n"
                            "Please enter a new Deezer userToken:"))
-        bool = loginUserToken(userToken)
-        if bool:
+        loginBool = loginUserToken(userToken)
+        if loginBool:
             setSetting('userToken', userToken)
     getCSRFToken()
     while True:
-        print(("\nSelect download mode\n1) Single link\n"
-               "2) All links (Download all links from downloads.txt,"
-               "one link per line)\n3) Interactive"))
+        print(("\nSelect download mode\n1) Interactive\n"
+               "2) Single link\n"
+               "3) Batch download (Download all links from downloads.txt, "
+               "one link per line)"))
         selectDownloadMode = input("Choice: ")
 
         if selectDownloadMode == '1':
+            interactiveMode()
+
+        elif selectDownloadMode == '2':
             while True:
                 link = input("Download link: ")
                 downloadDeezer(link)
 
-        elif selectDownloadMode == '2':
-            batchDownload('downloads.txt')
-
         elif selectDownloadMode == '3':
-            interactiveMode()
+            batchDownload('downloads.txt')
 
         else:
             print("Invalid option.\n")
