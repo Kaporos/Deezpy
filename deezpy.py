@@ -278,7 +278,8 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Disc#>'        : f'{trackInfo["disk_number"]:d}',
             '<Title>'        : trackInfo['title'],
             '<Label>'        : albInfo['label'],
-            '<UPC>'          : albInfo['upc']
+            '<UPC>'          : albInfo['upc'],
+            '<Record Type>'         : albInfo['record_type']
         }
     for key, val in replacedict.items():
         # Remove anything that is not an alphanumeric (+non-latin chars),

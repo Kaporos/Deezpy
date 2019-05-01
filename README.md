@@ -53,6 +53,7 @@ For album tracks:
 - Title
 - Label
 - UPC
+- Record Type
 
 For playlists:
 - Playlist Title
