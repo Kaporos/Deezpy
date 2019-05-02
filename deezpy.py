@@ -222,7 +222,7 @@ def writeTags(filename, ext, trackInfo, albInfo):
             os.remove(filename+ext)
             return False
         handle.delete()  # delete pre-existing tags
-        if getSetting('embed covers') == 'True':
+        if getSetting('embed album art') == 'True':
             pic = mutagen.flac.Picture()
             pic.data = image
             handle.clear_pictures()
@@ -238,7 +238,7 @@ def writeTags(filename, ext, trackInfo, albInfo):
         tags['tracknumber'] = (str(tags['tracknumber']) +
                                '/' + str(tags['totaltracks']))
         del tags['totaltracks']
-        if getSetting('embed covers') == 'True':
+        if getSetting('embed album art') == 'True':
             handle["albumart"] = mutagen.id3.APIC(data=image)
     else:
         print("Could not write tags. File extension not supported.")
