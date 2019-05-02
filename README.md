@@ -4,14 +4,14 @@ It is made to be a minimal and open Deezer downloader, with no obfuscated code. 
 
 ## Installation
 To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography` and `mutagen`.
-You can install them with: `pip install requests cryptography mutagen`
+You can install them with: `pip install requests cryptography mutagen` or via the packagemanager of your choice.
 
 After this, you can just download and run the script like any other Python script.
 
-Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this is in `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
+Before you can run Deezpy you must make a config file, or download the template config file from the repo. Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this isin `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
 
 ## Logging in
-Deezpy needs to login to Deezer to function properly. Upon the first start, Deezpy promps you to give a userToken.
+Deezpy needs to login to Deezer to function properly. You need to edit your config file and paste your userToken in it.
 
 ### Instructions to obtain your userToken
 The userToken is obtained by logging in to the Deezer website. The next steps can differ per browser.
@@ -28,12 +28,17 @@ The userToken is obtained by logging in to the Deezer website. The next steps ca
 3. On the left side click under Cookies click `https://www.deezer.com`
 4. In the table, copy the Value of the row with the Name `arl`
 
-## Downloading files
-You can choose between three options: download a single link, batch download links via `downloads.txt` or interactive mode, where you can search for tracks, albums or artists.
-For batch downloads, `downloads.txt` must be in the same directory as `deezpy.py`, with one link per line.
+## Running the script
+There are two ways you can interact with the script: via an interactive mode or via commandline options.
+The interactive mode is lauched by default, when no commandline arguments are given.
+
+The commandline options that can be given to the scipt are:
+-l LINK: downloads a given Deezer link.
+-ll: when deezpy is given this option, it starts a loop where you can continously feed it download links.
+-b BATCHFILE: given the path of a text file, deezpy downloads the links inside the batchfile (one link per line)
 
 ### Download quality
-When starting Deezpy for the first time, you can choose the download quality. This setting is saved in `deezpyrc`. If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.
+If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.
 
 If you want to change the quality setting, you can edit the `deezpyrc` file. The quality settings are as follows:
 - "1" = FLAC 1411 kbps
@@ -67,6 +72,7 @@ Thanks to the author of a script on codegists.com, where I based my script on. T
 Special thanks to the team maintaining DeezloaderRemix, without their code Deezpy would not have been here today.
 
 ## Disclaimer
+- This is alpha software! Configurations and behavior of this software changes all the time, with little regard to backwards compatibilty! Check this page regulary for updates.
 - We, Deezpy contributors, do not call to commit crimes.
 - The usage of this tool may be illegal in your country! Please inform yourself.
 - We, Deezpy contributors, do not give any guarantee at all and we are not responsible for damages of all kinds!

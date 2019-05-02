@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>
 
 # standard libraries:
+import argparse
 import configparser
 import hashlib
 import os
@@ -50,6 +51,12 @@ httpHeaders = {
         'Connection'      : 'keep-alive',
         }
 session.headers.update(httpHeaders)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-l', "--link", dest="link", help="Downloads a given Deezer URL")
+parser.add_argument('-ll', "--linkloop", dest="linkloop", action='store_true', help="Starts a loop which continiously asks for new links")
+parser.add_argument('-b', "--batch", dest="batchfile", help="Downloads links from downloads.txt in the folder")
+args = parser.parse_args()
 
 
 def apiCall(method, json_req=False):
@@ -236,7 +243,6 @@ def writeTags(filename, ext, trackInfo, albInfo):
     else:
         print("Could not write tags. File extension not supported.")
         return None
-
     for key, val in tags.items():
         handle[key] = str(val)
     handle.save()
@@ -279,7 +285,7 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Title>'        : trackInfo['title'],
             '<Label>'        : albInfo['label'],
             '<UPC>'          : albInfo['upc'],
-            '<Record Type>'         : albInfo['record_type']
+            '<Record Type>'  : albInfo['record_type']
         }
     for key, val in replacedict.items():
         # Remove anything that is not an alphanumeric (+non-latin chars),
@@ -484,7 +490,9 @@ def checkSettingsFile():
     elif os.path.isfile('deezpyrc'):
         return 'deezpyrc'
     else:
-        return None
+        print(("No settings file found!\n"
+               f"Please paste the settings file to Deezpy's directory or {platformSettingsPath()}"))
+        exit()
 
 
 def getSetting(option, section='DEFAULT'):
@@ -495,76 +503,6 @@ def getSetting(option, section='DEFAULT'):
         return config[section][option]
     except KeyError:
         return ''
-
-
-def setSetting(option,var=False,section='DEFAULT',question=False):
-    ''' Adds options to deezpyrc.
-        If question: handle simple y/N questions in genSettingsconf().
-    '''
-    config = configparser.ConfigParser()
-    config.read(checkSettingsFile())
-    if question:
-        while True:
-            userOpin = input(question).lower().strip()
-            if userOpin == '' or userOpin[0] == 'n':
-                var = 'False'
-                break
-            elif userOpin[0] == 'y':
-                var = 'True'
-                break
-    config.set(section, option, var)
-    with open(checkSettingsFile(), 'w') as configfile:
-        config.write(configfile)
-
-
-def genSettingsconf():
-    ''' Generates a settings file containing the download path,
-        playlist download path, song quality, userToken,
-        among other things.
-    '''
-    print("Settings file not found. Generating the file...")
-    pathQuestion = 0
-    while 1 > pathQuestion or 2 < pathQuestion:
-        try:
-            print("\nDo you want to create the settings file in\n1):",
-                    platformSettingsPath(),
-                   "\n2): In the folder you've ran Deezpy from")
-            pathQuestion = int(input("Choice: "))
-        except ValueError:
-            print("Please enter 1 or 2")
-    if pathQuestion == 1:
-        settingsPath = platformSettingsPath()
-    else:
-        settingsPath = 'deezpyrc'
-
-    quality = 0
-    while 1 > quality or 4 < quality:
-        try:
-            print(("\nSelect download quality:"
-                   "\n1) Flac 1411 kbps\n2) MP3 320 kbps\n"
-                   "3) Mp3 256 kbps\n4) MP3 128 kbps"))
-            quality = int(input("Choice: "))
-        except ValueError:
-            print("Please enter a quality setting\n")
-
-    userToken = input("Deezer userToken: ")
-    config = configparser.ConfigParser()
-    config['DEFAULT'] = {
-        'naming template'         : 'downloads/<Album Artist>/(<Year>) - <Album>/<Disc#>-<Track#> - <Title>',
-        'playlist naming template': 'downloads/playlists/<Playlist Title>/<Track#> - <Title>',
-        'quality'                 : quality,
-        'userToken'               : userToken
-        }
-    embedCovers = ("Embed album art to songs? "
-                   "This will increase the filesize significantly "
-                   "(y/N): ")
-    downloadLyrics = "Download lyrics files? (y/N): "
-    with open(settingsPath, 'w') as configfile:
-        config.write(configfile)
-    setSetting('embed album art', question=embedCovers)
-    setSetting('download lyrics', question=downloadLyrics)
-    print(("If you wish to edit any of these settings, "
-           "you can do so in deezpyrc. See the README for more details.\n"))
 
 
 def batchDownload(queueFile):
@@ -648,39 +586,26 @@ def interactiveMode():
     downloadDeezer(itemUrl)
 
 
-def menu():
-    if not checkSettingsFile():
-        genSettingsconf()
-    loginBool = loginUserToken(getSetting('userToken'))
-    while not loginBool:
-        userToken = input(("Not a valid userToken or the token has expired.\n"
-                           "Please enter a new Deezer userToken:"))
-        loginBool = loginUserToken(userToken)
-        if loginBool:
-            setSetting('userToken', userToken)
+def init():
+    if not loginUserToken(getSetting('userToken')):
+        print(("Not a valid userToken or the token has expired.\n"
+               "Please edit the userToken in your config file"))
+        exit()
     getCSRFToken()
-    while True:
-        print(("\nSelect download mode\n1) Interactive\n"
-               "2) Single link\n"
-               "3) Batch download (Download all links from downloads.txt, "
-               "one link per line)"))
-        selectDownloadMode = input("Choice: ")
 
-        if selectDownloadMode == '1':
-            interactiveMode()
-
-        elif selectDownloadMode == '2':
-            while True:
-                link = input("Download link: ")
-                downloadDeezer(link)
-
-        elif selectDownloadMode == '3':
-            batchDownload('downloads.txt')
-
-        else:
-            print("Invalid option.\n")
 
 if __name__ == '__main__':
-    print(("Thank you for using Deezpy."
+    init()
+    if args.link:
+        downloadDeezer(args.link)
+    elif args.linkloop:
+        while True:
+            link = input("Download link: ")
+            downloadDeezer(link)
+    elif args.batchfile:
+        batchDownload(args.batchfile)
+    else:
+        print(("Thank you for using Deezpy."
            "\nPlease consider supporting the artists!"))
-    menu()
+        while True:
+            interactiveMode()
