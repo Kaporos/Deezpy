@@ -55,7 +55,7 @@ session.headers.update(httpHeaders)
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', "--link", dest="link", help="Downloads a given Deezer URL")
 parser.add_argument('-ll', "--linkloop", dest="linkloop", action='store_true', help="Starts a loop which continiously asks for new links")
-parser.add_argument('-b', "--batch", dest="batchfile", help="Downloads links from downloads.txt in the folder")
+parser.add_argument('-b', "--batch", dest="batchfile", nargs='?', const="downloads.txt", help="Downloads links from a textfile. Default value: downloads.txt")
 args = parser.parse_args()
 
 
