@@ -33,9 +33,11 @@ There are two ways you can interact with the script: via an interactive mode or 
 The interactive mode is lauched by default, when no commandline arguments are given.
 
 The commandline options that can be given to the scipt are:
--l LINK: downloads a given Deezer link.
--ll: when deezpy is given this option, it starts a loop where you can continously feed it download links.
--b BATCHFILE: given the path of a text file, deezpy downloads the links inside the batchfile (one link per line). Default value is `downloads.txt`
+
+- -l LINK: downloads a given Deezer link.
+- -ll: when deezpy is given this option, it starts a loop where you can continously feed it download links.
+- -b BATCHFILE: given the path of a text file, deezpy downloads the links inside the batchfile (one link per line). Default value is `downloads.txt`
+- -q QUALITY: Downloads a song in a specified quality. Overrides the value in deezpyrc. See below for more information.
 
 ### Download quality
 If the preferred quality is not available for a file, Deezpy will try to download the file in one quality step below your preferred setting. If this quality is also not available it wil download the file one quality step below that and so on.

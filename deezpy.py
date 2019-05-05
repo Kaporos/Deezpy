@@ -56,6 +56,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-l', "--link", dest="link", help="Downloads a given Deezer URL")
 parser.add_argument('-ll', "--linkloop", dest="linkloop", action='store_true', help="Starts a loop which continiously asks for new links")
 parser.add_argument('-b', "--batch", dest="batchfile", nargs='?', const="downloads.txt", help="Downloads links from a textfile. Default value: downloads.txt")
+parser.add_argument('-q', "--quality", dest="quality", choices=['1','2','3', '4'], help="Set quality to FLAC")
 args = parser.parse_args()
 
 
@@ -102,7 +103,9 @@ def getCSRFToken():
 
 
 def privateApi(songId):
-    ''' Get the required info from the unofficial API to decrypt the files.'''
+    ''' Get the required info from the unofficial API
+        to decrypt the files.
+    '''
     req = apiCall('deezer.pageTrack', {'SNG_ID': songId})
     privateInfo = req['DATA']
     if "FALLBACK" in privateInfo:
@@ -211,7 +214,8 @@ def writeTags(filename, ext, trackInfo, albInfo):
         'genre'       : genre
         }
     # Download and load the image
-    # cover_xl returns 1000px jpg link, but 1500px png is available, so we modify url
+    # cover_xl returns 1000px jpg link,
+    # but 1500px png is available, so we modify url
     url = trackInfo['album']['cover_xl'].rsplit('/',1)[0]
     image = getCoverArt(url, filename, 1500)
     if ext == '.flac':
@@ -402,10 +406,14 @@ def getTrack(trackId, playlist=False):
     privateInfo = privateApi(trackId)
     albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
     # if the preferred quality is not available, get the one below etc.
-    qualitySetting = int(getSetting("quality")) - 1
+    if args.quality:
+        qualitySetting = int(args.quality)-1
+    else:
+        qualitySetting = int(getSetting("quality")) - 1
+
     filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320','FILESIZE_MP3_256',
                 'FILESIZE_MP3_128']#, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
-    qualities = ['9','3','5','1'] #,'',''] # filesize[i] corresponds with qualities[i]
+    qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
     quality = 0
     for i in range(qualitySetting, len(qualities)-1):
         if int(privateInfo[filesize[i]]) != 0:
@@ -491,7 +499,8 @@ def checkSettingsFile():
         return 'deezpyrc'
     else:
         print(("No settings file found!\n"
-               f"Please paste the settings file to Deezpy's directory or {platformSettingsPath()}"))
+               "Please paste the settings file to Deezpy's directory or"
+               f"{platformSettingsPath()}"))
         exit()
 
 
