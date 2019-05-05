@@ -56,7 +56,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-l', "--link", dest="link", help="Downloads a given Deezer URL")
 parser.add_argument('-ll', "--linkloop", dest="linkloop", action='store_true', help="Starts a loop which continiously asks for new links")
 parser.add_argument('-b', "--batch", dest="batchfile", nargs='?', const="downloads.txt", help="Downloads links from a textfile. Default value: downloads.txt")
-parser.add_argument('-q', "--quality", dest="quality", choices=['1','2','3', '4'], help="Set quality to FLAC")
+parser.add_argument('-q', "--quality", dest="quality", choices=['1','2','3', '4'], help="Sets quality, overrides deezpyrc")
 args = parser.parse_args()
 
 
