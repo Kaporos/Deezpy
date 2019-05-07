@@ -225,32 +225,46 @@ def writeTags(filename, ext, trackInfo, albInfo):
             print(error)
             os.remove(filename+ext)
             return False
-        handle.delete()  # delete pre-existing tags
+        handle.delete()  # delete pre-existing tags and pics
+        handle.clear_pictures()
         if getSetting('embed album art') == 'True':
             pic = mutagen.flac.Picture()
-            pic.data = image
-            handle.clear_pictures()
+            pic.encoding=3
+            pic.mime='image/png'
+            pic.type=3
+            pic.data=image
             handle.add_picture(pic)
+
+        for key, val in tags.items():
+            handle[key] = str(val)
+        handle.save()
+        return True
 
     elif ext == '.mp3':
         handle = MP3(filename+ext, ID3=EasyID3)
         handle.delete()
-        # label and albumart are not supported by easyID3, so we add them
+        # label is not supported by easyID3, so we add it
         EasyID3.RegisterTextKey("label", "TPUB")
-        EasyID3.RegisterTextKey("albumart", "APIC")
         # tracknumber and total tracks is one tag for ID3
         tags['tracknumber'] = (str(tags['tracknumber']) +
                                '/' + str(tags['totaltracks']))
         del tags['totaltracks']
+
+        for key, val in tags.items():
+            handle[key] = str(val)
+        handle.save()
         if getSetting('embed album art') == 'True':
-            handle["albumart"] = mutagen.id3.APIC(data=image)
+            handle= MP3(filename+ext)
+            handle["APIC"] = mutagen.id3.APIC(
+                                            encoding=3, # 3 is for utf-8
+                                            mime='image/png',
+                                            type=3, # 3 is for the cover image
+                                            data=image)
+            handle.save()
+        return True
     else:
         print("Could not write tags. File extension not supported.")
         return None
-    for key, val in tags.items():
-        handle[key] = str(val)
-    handle.save()
-    return True
 
 
 # https://gist.github.com/bgusach/a967e0587d6e01e889fd1d776c5f3729
