@@ -381,21 +381,21 @@ def downloadTrack(filename, ext, url, bfKey):
         fd.seek(filesize)  # jump to end of the file in order to append to it
         # Only every third 2048 byte block is encrypted.
         for chunk in req.iter_content(2048):
-            if i % 3 > 0:
-                fd.write(chunk)
-            elif len(chunk) < 2048:
-                fd.write(chunk)
-                break
-            else:
-                cipher = Cipher(algorithms.Blowfish(bfKey),
-                                modes.CBC(bytes([i for i in range(8)])),
-                                default_backend())
-                decryptor = cipher.decryptor()
-                decdata = decryptor.update(chunk) + decryptor.finalize()
-                fd.write(decdata)
+            if i % 3 == 0 and len(chunk) >= 2048:
+                chunk = decryptChunk(chunk, bfKey)
+            fd.write(chunk)
             i += 1
     os.rename(filename + '.tmp', filename + ext)
     return True
+
+def decryptChunk(chunk, bfKey):
+    ''' Decrypt a given encrypted chunk with a blowfish key. '''
+    cipher = Cipher(algorithms.Blowfish(bfKey),
+                    modes.CBC(bytes([i for i in range(8)])),
+                    default_backend())
+    decryptor = cipher.decryptor()
+    decChunk = decryptor.update(chunk) + decryptor.finalize()
+    return decChunk
 
 
 def getBlowfishKey(trackId):
