@@ -576,7 +576,7 @@ def interactiveMode():
     if itemType not in [str(n) for n in range(1, 4)]:
         print("Invalid option.")
         return
-    maxResults = 10
+    maxResults = 20
     searchTerm = input("\nSearch: ")
     if searchTerm == "":
         print("Invalid query.")
