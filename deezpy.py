@@ -21,7 +21,6 @@ import configparser
 import hashlib
 import os
 import re
-import sys
 import platform
 
 # third party libraries:
@@ -31,7 +30,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
-from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
 
@@ -62,8 +60,7 @@ args = parser.parse_args()
 
 def apiCall(method, json_req=False):
     ''' Requests info from the hidden api: gw-light.php.
-        Used for loginUserToken(), getCSRFToken()
-        and privateApi().
+        Used for loginUserToken() and privateApi().
     '''
     api_token = 'null' if method == 'deezer.getUserData' else CSRFToken
     unofficialApiQueries = {
@@ -90,16 +87,11 @@ def loginUserToken(token):
     session.cookies.update(cookies)
     req = apiCall('deezer.getUserData')
     if req['USER']['USER_ID']:
+        global CSRFToken # A cross-site request forgery token is needed
+        CSRFToken = req['checkForm']
         return True
     else:
         return False
-
-
-def getCSRFToken():
-    ''' A cross-site request forgery token is needed.'''
-    req = apiCall('deezer.getUserData')
-    global CSRFToken
-    CSRFToken = req['checkForm']
 
 
 def privateApi(songId):
@@ -129,7 +121,7 @@ def requests_retry_session(retries=3, backoff_factor=0.3,
         status_forcelist=status_forcelist,
         method_whitelist=frozenset(['GET', 'POST'])
     )
-    adapter = HTTPAdapter(max_retries=retry)
+    adapter = requests.adapters.HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     return session
@@ -143,11 +135,11 @@ def getJSON(mediaType, mediaId, subtype=""):
     return requests_retry_session().get(url).json()
 
 
-def getCoverArt(url, filename, size):
+def getCoverArt(artID, filename, size):
     ''' Retrieves the coverart/playlist image from the official API,
         downloads it to the download folder and returns it.
     '''
-    url = f'{url}/{size}x{size}.png'
+    url = f'https://e-cdns-images.dzcdn.net/images/cover/{artID}/{size}x{size}.png'
     path = os.path.dirname(filename)
     imageFile = f'{path}/cover.png'
     if not os.path.isdir(path):
@@ -180,7 +172,7 @@ def getLyrics(trackId, filename):
                 lyricLine = ''
             else:
                 line = lyricLine['line']
-                lyricLine = time + ' ' + line
+                lyricLine = f'{time}{" "}{line}'
             finally:
                 lyrics.append(lyricLine + '\n') # TODO add duration?
     elif 'LYRICS_TEXT' in req: # unsynced lyrics
@@ -188,13 +180,13 @@ def getLyrics(trackId, filename):
         ext = '.txt'
     else:
         return False
-    with open(filename + ext, 'a') as f:
+    with open(f'{filename}{ext}', 'a') as f:
         for lyricLine in lyrics:
             f.write(lyricLine)
 
 
-def writeTags(filename, ext, trackInfo, albInfo):
-    ''' Function to write tags to the file, be it FLAC or MP3.'''
+def getTags(trackInfo, albInfo, playlist):
+    ''' Combines tag info in one dict. '''
     # retrieve tags
     try:
         genre = albInfo['genres']['data'][0]['name']
@@ -213,58 +205,67 @@ def writeTags(filename, ext, trackInfo, albInfo):
         'label'       : albInfo['label'],
         'genre'       : genre
         }
+    if playlist: # edit some info to get playlist suitable tags
+        tags['title'] = 'Various Artists'
+        tags['totaltracks'] = playlist[0]['nb_tracks']
+        tags['album'] = playlist[0]['title']
+        tags['tracknumber'] = playlist[1]
+        tags['disknumber'] = ''
+        tags['date'] = ''
+        trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
+    return tags
+
+
+def writeFlacTags(filename, tags, imageUrl=None):
+    ''' Function to write tags to the file, be it FLAC or MP3.'''
     # Download and load the image
     # cover_xl returns 1000px jpg link,
     # but 1500px png is available, so we modify url
-    url = trackInfo['album']['cover_xl'].rsplit('/',1)[0]
-    image = getCoverArt(url, filename, 1500)
-    if ext == '.flac':
-        try:
-            handle = mutagen.File(filename+ext)
-        except mutagen.flac.FLACNoHeaderError as error:
-            print(error)
-            os.remove(filename+ext)
-            return False
-        handle.delete()  # delete pre-existing tags and pics
-        handle.clear_pictures()
-        if getSetting('embed album art') == 'True':
-            pic = mutagen.flac.Picture()
-            pic.encoding=3
-            pic.mime='image/png'
-            pic.type=3
-            pic.data=image
-            handle.add_picture(pic)
+    try:
+        handle = mutagen.File(filename)
+    except mutagen.flac.FLACNoHeaderError as error:
+        print(error)
+        os.remove(filename)
+        return False
+    handle.delete()  # delete pre-existing tags and pics
+    handle.clear_pictures()
+    if imageUrl:
+        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
+        pic = mutagen.flac.Picture()
+        pic.encoding=3
+        pic.mime='image/png'
+        pic.type=3
+        pic.data=image
+        handle.add_picture(pic)
 
-        for key, val in tags.items():
-            handle[key] = str(val)
+    for key, val in tags.items():
+        handle[key] = str(val)
+    handle.save()
+    return True
+
+
+def writeMP3Tags(filename, tags, imageUrl=None):
+    handle = MP3(filename, ID3=EasyID3)
+    handle.delete()
+    # label is not supported by easyID3, so we add it
+    EasyID3.RegisterTextKey("label", "TPUB")
+    # tracknumber and total tracks is one tag for ID3
+    tags['tracknumber'] = f'{str(tags["tracknumber"])}/{str(tags["totaltracks"])}'
+    del tags['totaltracks']
+
+    for key, val in tags.items():
+        handle[key] = str(val)
+    handle.save()
+    if imageUrl:
+        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
+        handle= MP3(filename)
+        handle["APIC"] = mutagen.id3.APIC(
+                                        encoding=3, # 3 is for utf-8
+                                        mime='image/png',
+                                        type=3, # 3 is for the cover image
+                                        data=image)
         handle.save()
-        return True
-
-    elif ext == '.mp3':
-        handle = MP3(filename+ext, ID3=EasyID3)
-        handle.delete()
-        # label is not supported by easyID3, so we add it
-        EasyID3.RegisterTextKey("label", "TPUB")
-        # tracknumber and total tracks is one tag for ID3
-        tags['tracknumber'] = (str(tags['tracknumber']) +
-                               '/' + str(tags['totaltracks']))
-        del tags['totaltracks']
-
-        for key, val in tags.items():
-            handle[key] = str(val)
-        handle.save()
-        if getSetting('embed album art') == 'True':
-            handle= MP3(filename+ext)
-            handle["APIC"] = mutagen.id3.APIC(
-                                            encoding=3, # 3 is for utf-8
-                                            mime='image/png',
-                                            type=3, # 3 is for the cover image
-                                            data=image)
-            handle.save()
-        return True
-    else:
-        print("Could not write tags. File extension not supported.")
-        return None
+    return True
 
 
 # https://gist.github.com/bgusach/a967e0587d6e01e889fd1d776c5f3729
@@ -285,16 +286,16 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
     ''' Names a file according to a template defined in deezpyrc.'''
     # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
-        pathspec = getSetting('playlist naming template')
+        pathspec = config.get('DEFAULT','playlist naming template')
         replacedict = {
             '<Playlist Title>' : playlistInfo[0]['title'],
             '<Track#>'         : f'{playlistInfo[1]:02d}',
             '<Title>'          : trackInfo['title']
         }
     else:
-        pathspec = getSetting('naming template')
+        pathspec = config.get('DEFAULT','naming template')
         replacedict = {
-            '<Album Artist>' : albInfo['artist']['name'],
+            '<Album Artist>' : trackInfo['artist']['name'],
             '<Album>'        : trackInfo['album']['title'],
             '<Date>'         : trackInfo['album']['release_date'],
             '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
@@ -330,7 +331,7 @@ def getTrackDownloadUrl(privateInfo, quality):
                       privateInfo['MEDIA_VERSION']))
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in step1]))
-    step2 = m.hexdigest() + char + step1 + char
+    step2 = f'{m.hexdigest()}{char}{step1}{char}'
     step2 = step2.ljust(80, ' ')
     cipher = Cipher(algorithms.AES(bytes('jo6aey6haid2Teih', 'ascii')),
                     modes.ECB(), default_backend())
@@ -354,50 +355,6 @@ def deezerTypeId(url):
     return url.split('/')[-2:]
 
 
-def downloadTrack(filename, ext, url, bfKey):
-    ''' Download and decrypts a track. Resumes download for tmp files.'''
-    if os.path.isfile(filename + '.tmp'):
-        print(f"Resuming download: {filename}{ext}...")
-        filesize = os.stat(filename + '.tmp').st_size  # size downloaded file
-        # reduce filesize to a multiple of 2048 for seamless decryption
-        filesize = filesize - (filesize % 2048)
-        i = filesize/2048
-        req = resumeDownload(url, filesize)
-    else:
-        print(f"Downloading: {filename}{ext}...")
-        filesize = 0
-        i = 0
-        req = requests_retry_session().get(url, stream=True)
-        if req.headers['Content-length'] == '0':
-            print("Empty file, skipping...\n")
-            return False
-        # make dirs if they do not exist yet
-        fileDir = os.path.dirname(filename + ext)
-        if not os.path.isdir(fileDir):
-            os.makedirs(fileDir)
-
-    # Decrypt content and write to file
-    with open(filename + '.tmp', 'ab') as fd:
-        fd.seek(filesize)  # jump to end of the file in order to append to it
-        # Only every third 2048 byte block is encrypted.
-        for chunk in req.iter_content(2048):
-            if i % 3 == 0 and len(chunk) >= 2048:
-                chunk = decryptChunk(chunk, bfKey)
-            fd.write(chunk)
-            i += 1
-    os.rename(filename + '.tmp', filename + ext)
-    return True
-
-def decryptChunk(chunk, bfKey):
-    ''' Decrypt a given encrypted chunk with a blowfish key. '''
-    cipher = Cipher(algorithms.Blowfish(bfKey),
-                    modes.CBC(bytes([i for i in range(8)])),
-                    default_backend())
-    decryptor = cipher.decryptor()
-    decChunk = decryptor.update(chunk) + decryptor.finalize()
-    return decChunk
-
-
 def getBlowfishKey(trackId):
     ''' Calculates the Blowfish decrypt key for a given SNG_ID.'''
     secret = 'g4el58wc0zvf9na1'
@@ -409,60 +366,118 @@ def getBlowfishKey(trackId):
     return bfKey
 
 
+def decryptChunk(chunk, bfKey):
+    ''' Decrypt a given encrypted chunk with a blowfish key. '''
+    cipher = Cipher(algorithms.Blowfish(bfKey),
+                    modes.CBC(bytes([i for i in range(8)])),
+                    default_backend())
+    decryptor = cipher.decryptor()
+    decChunk = decryptor.update(chunk) + decryptor.finalize()
+    return decChunk
+
+
+def downloadTrack(filename, ext, url, bfKey):
+    ''' Download and decrypts a track. Resumes download for tmp files.'''
+    tmpFile = f'{filename}.tmp'
+    realFile = f'{filename}{ext}'
+    if os.path.isfile(tmpFile):
+        print(f"Resuming download: {realFile}...", end='', flush=True)
+        filesize = os.stat(tmpFile).st_size  # size downloaded file
+        # reduce filesize to a multiple of 2048 for seamless decryption
+        filesize = filesize - (filesize % 2048)
+        i = filesize/2048
+        req = resumeDownload(url, filesize)
+    else:
+        print(f"Downloading: {realFile}...", end='', flush=True)
+        filesize = 0
+        i = 0
+        req = requests_retry_session().get(url, stream=True)
+        if req.headers['Content-length'] == '0':
+            print("Empty file, skipping...\n", end='')
+            return False
+        # make dirs if they do not exist yet
+        fileDir = os.path.dirname(realFile)
+        if not os.path.isdir(fileDir):
+            os.makedirs(fileDir)
+
+    # Decrypt content and write to file
+    with open(tmpFile, 'ab') as fd:
+        fd.seek(filesize)  # jump to end of the file in order to append to it
+        # Only every third 2048 byte block is encrypted.
+        for chunk in req.iter_content(2048):
+            if i % 3 == 0 and len(chunk) >= 2048:
+                chunk = decryptChunk(chunk, bfKey)
+            fd.write(chunk)
+            i += 1
+    os.rename(tmpFile, realFile)
+    return True
+
+
+def getQuality(privateInfo):
+    # if the preferred quality is not available, get the one below etc.
+    if args.quality:
+        qualitySetting = int(args.quality)-1
+    else:
+        qualitySetting = int(config.get('DEFAULT','quality')) - 1
+
+    filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320', 'FILESIZE_MP3_256', 'FILESIZE_MP3_128'] #, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
+    qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
+    quality = None
+    for i in range(qualitySetting, len(qualities)-1):
+        if int(privateInfo[filesize[i]]) != 0:
+            quality = qualities[i]
+            break
+    return quality
+
+
+def getExt(quality):
+    if quality == '9':
+        return '.flac'
+    elif quality == '5' or quality == '3' or quality == '1':
+        return '.mp3'
+    else:
+        return False
+
+
 def getTrack(trackId, playlist=False):
     ''' Calls the necessary functions to download and tag the tracks.
         Playlist must be a tuple of (playlistInfo, playlistTrack).
     '''
     trackInfo = getJSON('track', trackId)
+    albInfo = getJSON('album', trackInfo['album']['id'])
     if not trackInfo['readable']:
         print(f"Song {trackInfo['title']} not available, skipping...")
         return False
     privateInfo = privateApi(trackId)
-    albInfo = getJSON(*deezerTypeId(trackInfo['album']['link']))
-    # if the preferred quality is not available, get the one below etc.
-    if args.quality:
-        qualitySetting = int(args.quality)-1
-    else:
-        qualitySetting = int(getSetting("quality")) - 1
-
-    filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320','FILESIZE_MP3_256',
-                'FILESIZE_MP3_128']#, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
-    qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
-    quality = 0
-    for i in range(qualitySetting, len(qualities)-1):
-        if int(privateInfo[filesize[i]]) != 0:
-            quality = qualities[i]
-            break
-    if quality == '9':
-        ext = '.flac'
-    elif quality == '5' or quality == '3' or quality == '1':
-        ext = '.mp3'
-    else:
+    quality = getQuality(privateInfo)
+    if not quality:
         print((f"Song {trackInfo['title']} not available, skipping..."
                "\nMaybe try with a higher quality setting?"))
         return False
+    ext = getExt(quality)
 
-    if playlist:  # edit some info to get playlist suitable tags
-        albInfo['artist']['name'] = 'Various Artists'
-        albInfo['nb_tracks'] = playlist[0]['nb_tracks']
-        trackInfo['album']['title'] = playlist[0]['title']
-        trackInfo['track_position'] = playlist[1]
-        trackInfo['disk_number'] = ''
-        trackInfo['album']['release_date'] = ''
-        trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     fullFilenamePath = nameFile(trackInfo, albInfo, playlist)
-    if os.path.isfile(fullFilenamePath + ext):
-        print(f"{fullFilenamePath}{ext} already exists!")
+    fullFilenamePathExt = f'{fullFilenamePath}{ext}'
+    if os.path.isfile(fullFilenamePathExt):
+        print(f"{fullFilenamePathExt} already exists!")
+        return False
     else:
         decryptedUrl = getTrackDownloadUrl(privateInfo, quality)
         bfKey = getBlowfishKey(privateInfo['SNG_ID'])
         if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey):
-            writeTags(fullFilenamePath, ext, trackInfo, albInfo)
-            if getSetting('download lyrics') == 'True':
+            tags = getTags(trackInfo, albInfo, playlist)
+            if config.getboolean('DEFAULT', 'embed album art'):
+                imageUrl = privateInfo['ALB_PICTURE']
+            if quality == '9':
+                writeFlacTags(fullFilenamePathExt, tags, imageUrl)
+            else:
+                writeMP3Tags(fullFilenamePathExt, tags, imageUrl)
+
+            if config.getboolean('DEFAULT', 'download lyrics'):
                 getLyrics(trackId, fullFilenamePath)
-            print("Done!")
         else:
             return False
+    return True
 
 
 def downloadDeezer(url):
@@ -476,7 +491,8 @@ def downloadDeezer(url):
         return False
     mediaType, mediaId = deezerTypeId(url)
     if mediaType == 'track':
-        getTrack(mediaId)
+        if getTrack(mediaId):
+            print("Done!")
     # we can't invoke downloadDeezer() again, as in the else block because
     # playlists have a different tracklisting, not available in JSON
     elif mediaType == 'playlist':
@@ -486,7 +502,7 @@ def downloadDeezer(url):
         for trackId in ids:
             playlist = (playlistInfo, playlistTrack)
             getTrack(trackId, playlist)
-            playlistTrack = playlistTrack + 1
+            playlistTrack += 1
     else:
         subtype = 'albums' if mediaType == 'artist' else 'tracks'
         info = getJSON(mediaType, mediaId)
@@ -500,9 +516,9 @@ def downloadDeezer(url):
 def platformSettingsPath():
     osPlatform = platform.system()
     if osPlatform == 'Linux' or osPlatform == 'Darwin':
-       platformPath = os.path.expanduser('~')+'/.config/deezpyrc'
+       platformPath = f'{os.path.expanduser("~")}/.config/deezpyrc'
     elif osPlatform == 'Windows':
-        platformPath = os.getenv('APPDATA')+'/deezpyrc'
+        platformPath = f'{os.getenv("APPDATA")}/deezpyrc'
     return platformPath
 
 
@@ -516,16 +532,6 @@ def checkSettingsFile():
                "Please paste the settings file to Deezpy's directory or"
                f"{platformSettingsPath()}"))
         exit()
-
-
-def getSetting(option, section='DEFAULT'):
-    ''' Returns a setting from deezpyrc.'''
-    config = configparser.ConfigParser()
-    config.read(checkSettingsFile())
-    try:
-        return config[section][option]
-    except KeyError:
-        return ''
 
 
 def batchDownload(queueFile):
@@ -610,14 +616,15 @@ def interactiveMode():
 
 
 def init():
-    if not loginUserToken(getSetting('userToken')):
+    if not loginUserToken(config.get('DEFAULT', 'userToken')):
         print(("Not a valid userToken or the token has expired.\n"
                "Please edit the userToken in your config file"))
         exit()
-    getCSRFToken()
 
 
 if __name__ == '__main__':
+    config = configparser.ConfigParser()
+    config.read(checkSettingsFile())
     init()
     if args.link:
         downloadDeezer(args.link)
@@ -632,3 +639,4 @@ if __name__ == '__main__':
            "\nPlease consider supporting the artists!"))
         while True:
             interactiveMode()
+
