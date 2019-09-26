@@ -216,7 +216,7 @@ def getTags(trackInfo, albInfo, playlist):
     return tags
 
 
-def writeFlacTags(filename, tags, imageUrl=None):
+def writeFlacTags(filename, tags, imageUrl):
     ''' Function to write tags to the file, be it FLAC or MP3.'''
     # Download and load the image
     # cover_xl returns 1000px jpg link,
@@ -244,7 +244,7 @@ def writeFlacTags(filename, tags, imageUrl=None):
     return True
 
 
-def writeMP3Tags(filename, tags, imageUrl=None):
+def writeMP3Tags(filename, tags, imageUrl):
     handle = MP3(filename, ID3=EasyID3)
     handle.delete()
     # label is not supported by easyID3, so we add it
@@ -468,6 +468,9 @@ def getTrack(trackId, playlist=False):
             tags = getTags(trackInfo, albInfo, playlist)
             if config.getboolean('DEFAULT', 'embed album art'):
                 imageUrl = privateInfo['ALB_PICTURE']
+            else:
+                imageUrl = None
+
             if quality == '9':
                 writeFlacTags(fullFilenamePathExt, tags, imageUrl)
             else:
