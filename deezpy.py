@@ -609,13 +609,17 @@ def interactiveMode():
             print(itemLut[itemType]['string'].format(*itemLut[itemType]['tuple'](i, item)))
         except:
             continue
-    itemChoice = input("Choice: ")
-    if itemChoice not in [str(n) for n in range(1, len(items)+1)]:
-        print("Invalid option.")
-        return
-    itemIndex = int(itemChoice)-1
-    itemUrl = itemLut[itemType]['url'](items[itemIndex])
-    downloadDeezer(itemUrl)
+    print("Split multiple choices by space, enter 'q' to quit.")
+    itemChoice = input("Choice: ").split(' ')
+    for choice in itemChoice:
+        if choice == 'q':
+            return
+        elif choice not in [str(n) for n in range(1, len(items)+1)]:
+            print(f"{choice}: Invalid choice.")
+        else:
+            itemIndex = int(choice)-1
+            itemUrl = itemLut[itemType]['url'](items[itemIndex])
+            downloadDeezer(itemUrl)
 
 
 def init():
