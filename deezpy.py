@@ -295,7 +295,8 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
     else:
         pathspec = config.get('DEFAULT','naming template')
         replacedict = {
-            '<Album Artist>' : trackInfo['artist']['name'],
+            '<Album Artist>' : albInfo['artist']['name'],
+            '<Artist>'       : trackInfo['artist']['name'],
             '<Album>'        : trackInfo['album']['title'],
             '<Date>'         : trackInfo['album']['release_date'],
             '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
