@@ -555,21 +555,26 @@ def interactiveMode():
         Performs item discovery through search
         and download from retrieved item urls
     '''
+    # item['EXPLICIT_ALBUM_CONTENT']['EXPLICIT_LYRICS_STATUS']:
+    # 1 if lyrics contain cuss words, 2 if ?, 3 if ?, 4 if ?
+    # same for item['EXPLICIT_TRACK_CONTENT']['EXPLICIT_LYRICS_STATUS']
     print("\nSelect download type\n1) Track\n2) Album\n3) Artist")
     itemLut = {
         '1': {
             'selector': 'TRACK',
-            'string': '{0}) {1} - {2} / {3}',
+            'string': '{0}) {1} - {2} / {3} {4}',
             'tuple': lambda i, item : (str(i+1), item['SNG_TITLE'],
-                                       item['ART_NAME'], item['ALB_TITLE']),
+                                       item['ART_NAME'], item['ALB_TITLE'],
+                                       '[explicit]' if item['EXPLICIT_TRACK_CONTENT']['EXPLICIT_LYRICS_STATUS'] == 1 else ''),
             'type': 'song',
             'url': lambda item : f'https://www.deezer.com/en/track/{item["SNG_ID"]}'
         },
         '2': {
             'selector': 'ALBUM',
-            'string': '{0}) {1} - {2}',
+            'string': '{0}) {1} - {2} {3}',
             'tuple': lambda i, item : (str(i+1), item['ALB_TITLE'],
-                                       item['ART_NAME']),
+                                       item['ART_NAME'],
+                                       '[explicit]' if item['EXPLICIT_ALBUM_CONTENT']['EXPLICIT_LYRICS_STATUS'] == 1 else ''),
             'type': 'album',
             'url': lambda item : f'https://www.deezer.com/en/album/{item["ALB_ID"]}'
         },
