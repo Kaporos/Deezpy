@@ -52,6 +52,7 @@ If you want to change the quality setting, you can edit the `deezpyrc` file. The
 There are many options available for the path specification.
 For album tracks:
 - Album Artist
+- Artist
 - Album
 - Date
 - Year
