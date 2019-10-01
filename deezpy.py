@@ -382,14 +382,14 @@ def downloadTrack(filename, ext, url, bfKey):
     tmpFile = f'{filename}.tmp'
     realFile = f'{filename}{ext}'
     if os.path.isfile(tmpFile):
-        print(f"Resuming download: {realFile}...", end='', flush=True)
+        print(f"Resuming download: {realFile}... ", end='', flush=True)
         filesize = os.stat(tmpFile).st_size  # size downloaded file
         # reduce filesize to a multiple of 2048 for seamless decryption
         filesize = filesize - (filesize % 2048)
         i = filesize/2048
         req = resumeDownload(url, filesize)
     else:
-        print(f"Downloading: {realFile}...", end='', flush=True)
+        print(f"Downloading: {realFile}... ", end='', flush=True)
         filesize = 0
         i = 0
         req = requests_retry_session().get(url, stream=True)
