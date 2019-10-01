@@ -596,10 +596,9 @@ def interactiveMode():
     if searchTerm == "":
         print("Invalid query.")
         return
+    # selector can be 'TOP_RESULT', 'TRACK', 'ARTIST', 'ALBUM', 'PLAYLIST', 'RADIO', 'CHANNEL', 'SHOW', 'EPISODE', 'LIVESTREAM', 'USER'
     res = apiCall('deezer.suggest', {'NB': maxResults, 'QUERY': searchTerm, 'TYPES': {
-        'ALBUM': True,
-        'ARTIST': True,
-        'TRACK': True
+        itemLut[itemType]['selector']: True
     }})
     if len(res['TOP_RESULT']) > 0 and res['TOP_RESULT'][0]['__TYPE__'] == itemLut[itemType]['type']:
         items += res['TOP_RESULT']
