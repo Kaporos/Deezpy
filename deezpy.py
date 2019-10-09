@@ -308,9 +308,9 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Record Type>'  : albInfo['record_type']
         }
     for key, val in replacedict.items():
-        # Remove anything that is not an alphanumeric (+non-latin chars),
-        # space, dash, underscore, dot or parentheses for every replacedict key
-        val = re.sub(r'(?u)[^-\w.( )]', '_', val)
+        # Removes any forbidden filename chars
+        # <>:"|?*/\
+        val = re.sub(r'[<>:\"|\?\*/\\]', '_', val)
         # folder dirs and the filename are now max 250 bytes long:
         val = val.encode('utf-8')[:250].decode('utf-8', 'ignore')
         replacedict[key] = val
