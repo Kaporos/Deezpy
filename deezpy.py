@@ -62,10 +62,9 @@ def apiCall(method, json_req=False):
     ''' Requests info from the hidden api: gw-light.php.
         Used for loginUserToken() and privateApi().
     '''
-    api_token = 'null' if method == 'deezer.getUserData' else CSRFToken
     unofficialApiQueries = {
         'api_version': '1.0',
-        'api_token'  : api_token,
+        'api_token'  : 'null' if method == 'deezer.getUserData' else CSRFToken,
         'input'      : '3',
         'method'     : method
         }
