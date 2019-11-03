@@ -422,21 +422,19 @@ def getQuality(privateInfo):
 
     filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320', 'FILESIZE_MP3_256', 'FILESIZE_MP3_128'] #, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
     qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
-    quality = None
     for i in range(qualitySetting, len(qualities)-1):
         if int(privateInfo[filesize[i]]) != 0:
-            quality = qualities[i]
-            break
-    return quality
+            if not qualitySetting == int(qualities[i]):
+                print(f"This song is not available in the preferred quality {filesize[qualitySetting][9:]}, downloading in {filesize[i][9:]}")
+            return qualities[i]
+    return None
 
 
 def getExt(quality):
     if quality == '9':
         return '.flac'
-    elif quality == '5' or quality == '3' or quality == '1':
-        return '.mp3'
     else:
-        return False
+        return '.mp3'
 
 
 def getTrack(trackId, playlist=False):
