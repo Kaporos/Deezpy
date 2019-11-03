@@ -443,9 +443,9 @@ def getTrack(trackId, playlist=False):
     '''
     trackInfo = getJSON('track', trackId)
     albInfo = getJSON('album', trackInfo['album']['id'])
-    if not trackInfo['readable']:
-        print(f"Song {trackInfo['title']} not available, skipping...")
-        return False
+    #if not trackInfo['readable']:
+    #    print(f"Song {trackInfo['title']} not available, skipping...")
+    #    return False
     privateInfo = privateApi(trackId)
     quality = getQuality(privateInfo)
     if not quality:
