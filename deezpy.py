@@ -424,7 +424,7 @@ def getQuality(privateInfo):
     qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
     for i in range(qualitySetting, len(qualities)-1):
         if int(privateInfo[filesize[i]]) != 0:
-            if not qualitySetting == int(qualities[i]):
+            if not i == qualitySetting:
                 print(f"This song is not available in the preferred quality {filesize[qualitySetting][9:]}, downloading in {filesize[i][9:]}")
             return qualities[i]
     return None
