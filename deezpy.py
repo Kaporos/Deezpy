@@ -60,7 +60,6 @@ args = parser.parse_args()
 
 def apiCall(method, json_req=False):
     ''' Requests info from the hidden api: gw-light.php.
-        Used for loginUserToken() and privateApi().
     '''
     unofficialApiQueries = {
         'api_version': '1.0',
@@ -76,37 +75,51 @@ def apiCall(method, json_req=False):
     return req['results']
 
 
-def loginUserToken(token):
-    ''' Handles userToken for deezpyrc file, for initial setup.
-        If no USER_ID is found, False is returned and thus the
-        cookie arl is wrong. Instructions for obtaining your arl
-        string are in the README.md
-    '''
-    cookies = {'arl': token}
-    session.cookies.update(cookies)
+def getCSRFToken():
     req = apiCall('deezer.getUserData')
-    if req['USER']['USER_ID']:
-        global CSRFToken # A cross-site request forgery token is needed
-        CSRFToken = req['checkForm']
-        return True
-    else:
-        return False
+    global CSRFToken
+    CSRFToken = req['checkForm']
+
+
+def getSid():
+    req = requests_retry_session().get(
+        url='https://www.deezer.com')
+    global sidToken
+    sidToken = req.cookies['sid']
+
+
+def mobileApiCall(method, json_req=False):
+    ''' Requests info from the hidden mobile api: gateway.php
+        Is used in privateApi(), and implements loginless download
+    '''
+    unofficialApiQueries = {
+        'api_key' : '4VCYIJUCDLOUELGD1V8WBVYBNVDYOXEWSLLZDONGBBDFVXTZJRXPR29JRLQFO6ZE',
+        'sid'     : sidToken,
+        'output'  : '3',
+        'input'   : '3',
+        'method'  : method
+        }
+    req = requests_retry_session().post(
+        url='https://api.deezer.com/1.0/gateway.php',
+        params=unofficialApiQueries,
+        json=json_req
+        ).json()
+    return req['results']
 
 
 def privateApi(songId):
-    ''' Get the required info from the unofficial API
+    ''' Get the required info from the hidden mobile api
         to decrypt the files.
     '''
-    req = apiCall('deezer.pageTrack', {'SNG_ID': songId})
-    privateInfo = req['DATA']
-    if "FALLBACK" in privateInfo:
+    req = mobileApiCall('song_getData', {'SNG_ID': songId})
+#    if "FALLBACK" in req:
         # Some songs in a playlist have other IDs than the same song
         # in an album/artist page. These ids from songs in a playlist
         # do not return albInfo properly. The FALLBACK id works, however.
-        songId = privateInfo["FALLBACK"]['SNG_ID']
+#        songId = privateInfo["FALLBACK"]['SNG_ID']
         # we need to replace the track with the FALLBACK one
-        privateInfo = privateApi(songId)
-    return privateInfo
+#        privateInfo = privateApi(songId)
+    return req
 
 
 # https://www.peterbe.com/plog/best-practice-with-retries-with-requests
@@ -320,13 +333,11 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
 
 def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
-        a given MD5_ORIGIN, SNG_ID and MEDIA_VERSION.
-        If a user is not logged in, no MD5_ORIGIN is
-        found in privateInfo.
+        a given PUID (MD5 hash), SNG_ID and MEDIA_VERSION.
     '''
     # this specific unicode char is needed
     char = b'\xa4'.decode('unicode_escape')
-    step1 = char.join((privateInfo['MD5_ORIGIN'],
+    step1 = char.join((privateInfo['PUID'],
                       quality, privateInfo['SNG_ID'],
                       privateInfo['MEDIA_VERSION']))
     m = hashlib.md5()
@@ -337,7 +348,7 @@ def getTrackDownloadUrl(privateInfo, quality):
                     modes.ECB(), default_backend())
     encryptor = cipher.encryptor()
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
-    cdn = privateInfo['MD5_ORIGIN'][0]
+    cdn = privateInfo['PUID'][0]
     decryptedUrl = f'https://e-cdns-proxy-{cdn}.dzcdn.net/mobile/1/{step3}'
     return decryptedUrl
 
@@ -623,12 +634,9 @@ def interactiveMode():
             itemUrl = itemLut[itemType]['url'](items[itemIndex])
             downloadDeezer(itemUrl)
 
-
 def init():
-    if not loginUserToken(config.get('DEFAULT', 'userToken')):
-        print(("Not a valid userToken or the token has expired.\n"
-               "Please edit the userToken in your config file"))
-        exit()
+    getCSRFToken()
+    getSid()
 
 
 if __name__ == '__main__':

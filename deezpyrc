@@ -5,6 +5,5 @@
 naming template = downloads/<Album Artist>/(<Year>) - <Album>/<Disc#>-<Track#> - <Title>
 playlist naming template = downloads/playlists/<Playlist Title>/<Track#> - <Title>
 quality = 1
-usertoken =
 embed album art = False
 download lyrics = False

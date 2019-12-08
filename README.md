@@ -8,25 +8,7 @@ You can install them with: `pip install requests cryptography mutagen` or via th
 
 After this, you can just download and run the script like any other Python script.
 
-Before you can run Deezpy you must make a config file, or download the template config file from the repo. Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this isin `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
-
-## Logging in
-Deezpy needs to login to Deezer to function properly. You need to edit your config file and paste your userToken in it.
-
-### Instructions to obtain your userToken
-The userToken is obtained by logging in to the Deezer website. The next steps can differ per browser.
-
-#### Chrom/ium
-1. Press F12
-2. Click Application
-3. In the left sidebar, click Cookies and then `https://www.deezer.com`
-4. In the table, in the row `arl` copy the Value
-
-#### Firefox
-1. Press F12
-2. Go to storage
-3. On the left side click under Cookies click `https://www.deezer.com`
-4. In the table, copy the Value of the row with the Name `arl`
+Before you can run Deezpy you must make a config file, or download the template config file from the repo. Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this is in `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
 
 ## Running the script
 There are two ways you can interact with the script: via an interactive mode or via commandline options.
