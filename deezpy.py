@@ -75,17 +75,12 @@ def apiCall(method, json_req=False):
     return req['results']
 
 
-def getCSRFToken():
+def getTokens():
     req = apiCall('deezer.getUserData')
     global CSRFToken
     CSRFToken = req['checkForm']
-
-
-def getSid():
-    req = requests_retry_session().get(
-        url='https://www.deezer.com')
     global sidToken
-    sidToken = req.cookies['sid']
+    sidToken = req['SESSION_ID']
 
 
 def mobileApiCall(method, json_req=False):
@@ -634,9 +629,9 @@ def interactiveMode():
             itemUrl = itemLut[itemType]['url'](items[itemIndex])
             downloadDeezer(itemUrl)
 
+
 def init():
-    getCSRFToken()
-    getSid()
+    getTokens()
 
 
 if __name__ == '__main__':
