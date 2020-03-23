@@ -11,3 +11,4 @@ save album art = True
 album art naming template = Cover.png
 album art size = 1500
 embed album art size = 500
+artist separator = ;

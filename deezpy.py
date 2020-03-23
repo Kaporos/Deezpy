@@ -206,7 +206,7 @@ def getTags(trackInfo, albInfo, playlist):
         'tracknumber' : trackInfo['track_position'],
         'album'       : trackInfo['album']['title'],
         'date'        : trackInfo['album']['release_date'],
-        'artist'      : trackInfo['artist']['name'],
+        'artist'      : getArtists(trackInfo),
         'bpm'         : trackInfo['bpm'],
         'albumartist' : albInfo['artist']['name'],
         'totaltracks' : albInfo['nb_tracks'],
@@ -223,6 +223,11 @@ def getTags(trackInfo, albInfo, playlist):
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     return tags
 
+def getArtists(trackInfo):
+    artists = []
+    for artist in trackInfo['contributors']:
+        artists.append(artist['name'])
+    return artists
 
 def writeFlacTags(filename, tags, coverArtId):
     ''' Function to write tags to FLAC file.'''
@@ -245,9 +250,11 @@ def writeFlacTags(filename, tags, coverArtId):
         pic.type=3
         pic.data=image
         handle.add_picture(pic)
-
     for key, val in tags.items():
-        handle[key] = str(val)
+        if key == 'artist':
+            handle[key] = val # Handle multiple artists
+        else:
+            handle[key] = str(val)
     handle.save()
     return True
 
@@ -260,9 +267,16 @@ def writeMP3Tags(filename, tags, coverArtId):
     # tracknumber and total tracks is one tag for ID3
     tags['tracknumber'] = f'{str(tags["tracknumber"])}/{str(tags["totaltracks"])}'
     del tags['totaltracks']
-
+    separator = config.get('DEFAULT', 'artist separator') or ';'
     for key, val in tags.items():
-        handle[key] = str(val)
+        if key == 'artist':
+            # Concatenate artists
+            artists = val[0] # Main artist
+            for artist in val[1:]:
+                artists += separator + artist
+            handle[key] = artists
+        else:
+            handle[key] = str(val)
     handle.save()
     if coverArtId:
         image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
