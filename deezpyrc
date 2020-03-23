@@ -7,3 +7,7 @@ playlist naming template = downloads/playlists/<Playlist Title>/<Track#> - <Titl
 quality = 1
 embed album art = False
 download lyrics = False
+save album art = True
+album art naming template = Cover.png
+album art size = 1500
+embed album art size = 500

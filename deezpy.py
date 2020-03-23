@@ -141,24 +141,25 @@ def getJSON(mediaType, mediaId, subtype=""):
     url = f'https://api.deezer.com/{mediaType}/{mediaId}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
-
-def getCoverArt(artID, filename, size):
-    ''' Retrieves the coverart/playlist image from the official API,
-        downloads it to the download folder and returns it.
+def getCoverArt(coverArtId, size):
+    ''' Retrieves the coverart/playlist image from the official API, and 
+        returns it.
     '''
-    url = f'https://e-cdns-images.dzcdn.net/images/cover/{artID}/{size}x{size}.png'
+    _size = size or 500 # Default size
+    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{_size}x{_size}.png'
+    r = requests_retry_session().get(url)
+    return r.content
+
+def saveCoverArt(image, filename):
     path = os.path.dirname(filename)
-    imageFile = f'{path}/cover.png'
     if not os.path.isdir(path):
         os.makedirs(path)
-    if os.path.isfile(imageFile):
-        with open(imageFile, 'rb') as f:
+    if os.path.isfile(filename):
+        with open(filename, 'rb') as f:
             return f.read()
     else:
-        with open(imageFile, 'wb') as f:
-            r = requests_retry_session().get(url)
-            f.write(r.content)
-            return r.content
+        with open(filename, 'wb') as f:
+            f.write(image)
 
 
 def getLyrics(trackId, filename):
@@ -223,8 +224,8 @@ def getTags(trackInfo, albInfo, playlist):
     return tags
 
 
-def writeFlacTags(filename, tags, imageUrl):
-    ''' Function to write tags to the file, be it FLAC or MP3.'''
+def writeFlacTags(filename, tags, coverArtId):
+    ''' Function to write tags to FLAC file.'''
     # Download and load the image
     # cover_xl returns 1000px jpg link,
     # but 1500px png is available, so we modify url
@@ -236,8 +237,8 @@ def writeFlacTags(filename, tags, imageUrl):
         return False
     handle.delete()  # delete pre-existing tags and pics
     handle.clear_pictures()
-    if imageUrl:
-        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
+    if coverArtId:
+        image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
         pic = mutagen.flac.Picture()
         pic.encoding=3
         pic.mime='image/png'
@@ -251,7 +252,7 @@ def writeFlacTags(filename, tags, imageUrl):
     return True
 
 
-def writeMP3Tags(filename, tags, imageUrl):
+def writeMP3Tags(filename, tags, coverArtId):
     handle = MP3(filename, ID3=EasyID3)
     handle.delete()
     # label is not supported by easyID3, so we add it
@@ -263,8 +264,8 @@ def writeMP3Tags(filename, tags, imageUrl):
     for key, val in tags.items():
         handle[key] = str(val)
     handle.save()
-    if imageUrl:
-        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
+    if coverArtId:
+        image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
         handle= MP3(filename)
         handle["APIC"] = mutagen.id3.APIC(
                                         encoding=3, # 3 is for utf-8
@@ -299,7 +300,7 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Track#>'         : f'{playlistInfo[1]:02d}',
             '<Title>'          : trackInfo['title']
         }
-    else:
+    elif trackInfo:
         pathspec = config.get('DEFAULT','naming template')
         replacedict = {
             '<Album Artist>' : albInfo['artist']['name'],
@@ -313,6 +314,24 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Label>'        : albInfo['label'],
             '<UPC>'          : albInfo['upc'],
             '<Record Type>'  : albInfo['record_type']
+        }
+    else: # Album cover template
+        trackPath = config.get('DEFAULT','naming template')
+        if trackPath.endswith('/'):
+            trackPath = trackPath[:-1]
+        match = re.search(r'.*/', trackPath)
+        if match: # Nested template
+            pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
+        else:
+            pathspec = config.get('DEFAULT','album art naming template')
+        replacedict = {
+            '<Album Artist>' : albInfo['artist']['name'],
+            '<Label>'        : albInfo['label'],
+            '<UPC>'          : albInfo['upc'],
+            '<Record Type>'  : albInfo['record_type'],
+            '<Album>'        : albInfo['title'],
+            '<Date>'         : albInfo['release_date'],
+            '<Year>'         : albInfo['release_date'].split('-')[0],
         }
     for key, val in replacedict.items():
         # Removes any forbidden filename chars
@@ -471,14 +490,14 @@ def getTrack(trackId, playlist=False):
         if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey):
             tags = getTags(trackInfo, albInfo, playlist)
             if config.getboolean('DEFAULT', 'embed album art'):
-                imageUrl = privateInfo['ALB_PICTURE']
+                coverArtId = privateInfo['ALB_PICTURE']
             else:
-                imageUrl = None
+                coverArtId = None
 
             if quality == '9':
-                writeFlacTags(fullFilenamePathExt, tags, imageUrl)
+                writeFlacTags(fullFilenamePathExt, tags, coverArtId)
             else:
-                writeMP3Tags(fullFilenamePathExt, tags, imageUrl)
+                writeMP3Tags(fullFilenamePathExt, tags, coverArtId)
 
             if config.getboolean('DEFAULT', 'download lyrics'):
                 getLyrics(trackId, fullFilenamePath)
@@ -513,6 +532,13 @@ def downloadDeezer(url):
     else:
         subtype = 'albums' if mediaType == 'artist' else 'tracks'
         info = getJSON(mediaType, mediaId)
+        # Save album cover art
+        if config.getboolean('DEFAULT', 'save album art'):
+            coverArtId = info['cover_small'].split('/')[-2]
+            image = getCoverArt(coverArtId, config.getint('DEFAULT', 'album art size'))
+            filename = nameFile(trackInfo=None, albInfo=info, playlistInfo=None)
+            print(filename)
+            saveCoverArt(image, filename)
         if mediaType == 'album':
             print(f"\n{info['artist']['name']} - {info['title']}")
         info = getJSON(mediaType, mediaId, subtype)
