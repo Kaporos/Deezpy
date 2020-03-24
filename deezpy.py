@@ -300,7 +300,7 @@ def writeMP3Tags(filename, tags, coverArtId):
             if 'uslt' in val: # unsynced lyrics
                 handle.save()
                 id3Handle = ID3(filename)
-                id3Handle[u"USLT::'eng'"] = (USLT(encoding=3, text=val['uslt']))
+                id3Handle['USLT'] = USLT(encoding=3, text=val['uslt'])
                 id3Handle.save(filename)
                 handle.load(filename) # Reload tags
         else:
