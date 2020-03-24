@@ -298,7 +298,7 @@ def writeMP3Tags(filename, tags, coverArtId):
                 artists += separator + artist
             handle[key] = artists
         elif key == 'lyrics':
-             if val['type'] == 'USLT':
+            if val['type'] == 'USLT':
                 handle.save()
                 id3Handle = ID3(filename)
                 id3Handle[u"USLT::'eng'"] = (USLT(encoding=3, lang=u'eng', desc=u'USLT', text=val['text']))
