@@ -168,9 +168,10 @@ def getLyrics(trackId):
         and returns them
     '''
     req = apiCall('song.getLyrics', {'sng_id': trackId})
+    lyrics = {}
     if 'LYRICS_SYNC_JSON' in req: # synced lyrics
         rawLyrics = req['LYRICS_SYNC_JSON']
-        lyrics = ''
+        syncedLyrics = ''
         for lyricLine in rawLyrics:
             try:
                 time = lyricLine['lrc_timestamp']
@@ -180,34 +181,29 @@ def getLyrics(trackId):
                 line = lyricLine['line']
                 lyricLine = f'{time}{" "}{line}'
             finally:
-                lyrics += lyricLine + '\n' # TODO add duration?
-        ret = {}
-        ret['type'] = 'SYLT'
-        ret['text'] = lyrics
-        return ret
-    elif 'LYRICS_TEXT' in req: # unsynced lyrics
-        ret = {}
-        ret['type'] = 'USLT'
-        ret['text'] = req['LYRICS_TEXT'] 
-        return ret
-    else:
-        return False
+                syncedLyrics += lyricLine + '\n' # TODO add duration?
+        lyrics['sylt'] = syncedLyrics 
+    if 'LYRICS_TEXT' in req: # unsynced lyrics
+        lyrics['uslt'] = req['LYRICS_TEXT']
+    return lyrics
 
 def saveLyrics(lyrics, filename):
     ''' Writes synced or unsynced lyrics to file
     '''
     if not (lyrics and filename):
         return False
-
-    if lyrics['type'] == 'USLT':
-        ext = 'txt'
-    elif lyrics['type'] == 'SYLT':
+    
+    lyricsType = 'uslt'
+    if 'sylt' in lyrics:
         ext = 'lrc'
+        lyricsType = 'sylt'
+    elif 'uslt' in lyrics:
+        ext = 'txt'
     else:
         raise ValueError('Unknown lyrics type')
     
     with open(f'{filename}.{ext}', 'a') as f:
-        for line in lyrics['text']:
+        for line in lyrics[lyricsType]:
             f.write(line)
     return True
 
@@ -275,6 +271,9 @@ def writeFlacTags(filename, tags, coverArtId):
     for key, val in tags.items():
         if key == 'artist':
             handle[key] = val # Handle multiple artists
+        elif key == 'lyrics':
+            if 'uslt' in val: # unsynced lyrics
+                handle['lyrics'] = val['uslt']
         else:
             handle[key] = str(val)
     handle.save()
@@ -298,10 +297,10 @@ def writeMP3Tags(filename, tags, coverArtId):
                 artists += separator + artist
             handle[key] = artists
         elif key == 'lyrics':
-            if val['type'] == 'USLT':
+            if 'uslt' in val: # unsynced lyrics
                 handle.save()
                 id3Handle = ID3(filename)
-                id3Handle[u"USLT::'eng'"] = (USLT(encoding=3, lang=u'eng', desc=u'USLT', text=val['text']))
+                id3Handle[u"USLT::'eng'"] = (USLT(encoding=3, text=val['uslt']))
                 id3Handle.save(filename)
                 handle.load(filename) # Reload tags
         else:
