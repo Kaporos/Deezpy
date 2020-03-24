@@ -29,6 +29,7 @@ import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3, USLT, APIC
 from mutagen.mp3 import MP3
 from requests.packages.urllib3.util.retry import Retry
 
@@ -162,17 +163,14 @@ def saveCoverArt(image, filename):
             f.write(image)
 
 
-def getLyrics(trackId, filename):
+def getLyrics(trackId):
     ''' Recieves (timestamped) lyrics from the unofficial api
-        and converts them to a conventional .lrc file.
-        If only the unsynced lyrics are found, these are written
-        to a .txt file.
+        and returns them
     '''
     req = apiCall('song.getLyrics', {'sng_id': trackId})
     if 'LYRICS_SYNC_JSON' in req: # synced lyrics
         rawLyrics = req['LYRICS_SYNC_JSON']
-        ext = '.lrc'
-        lyrics = []
+        lyrics = ''
         for lyricLine in rawLyrics:
             try:
                 time = lyricLine['lrc_timestamp']
@@ -182,16 +180,36 @@ def getLyrics(trackId, filename):
                 line = lyricLine['line']
                 lyricLine = f'{time}{" "}{line}'
             finally:
-                lyrics.append(lyricLine + '\n') # TODO add duration?
+                lyrics += lyricLine + '\n' # TODO add duration?
+        ret = {}
+        ret['type'] = 'SYLT'
+        ret['text'] = lyrics
+        return ret
     elif 'LYRICS_TEXT' in req: # unsynced lyrics
-        lyrics = req['LYRICS_TEXT'].splitlines(True) # True keeps the \n
-        ext = '.txt'
+        ret = {}
+        ret['type'] = 'USLT'
+        ret['text'] = req['LYRICS_TEXT'] 
+        return ret
     else:
         return False
-    with open(f'{filename}{ext}', 'a') as f:
-        for lyricLine in lyrics:
-            f.write(lyricLine)
 
+def saveLyrics(lyrics, filename):
+    ''' Writes synced or unsynced lyrics to file
+    '''
+    if not (lyrics and filename):
+        return False
+
+    if lyrics['type'] == 'USLT':
+        ext = 'txt'
+    elif lyrics['type'] == 'SYLT':
+        ext = 'lrc'
+    else:
+        raise ValueError('Unknown lyrics type')
+    
+    with open(f'{filename}.{ext}', 'a') as f:
+        for line in lyrics['text']:
+            f.write(line)
+    return True
 
 def getTags(trackInfo, albInfo, playlist):
     ''' Combines tag info in one dict. '''
@@ -213,6 +231,10 @@ def getTags(trackInfo, albInfo, playlist):
         'label'       : albInfo['label'],
         'genre'       : genre
         }
+    if config.getboolean('DEFAULT', 'embed lyrics'):
+        lyrics = getLyrics(trackInfo['id'])
+        if (lyrics):
+            tags['lyrics'] = lyrics
     if playlist: # edit some info to get playlist suitable tags
         tags['title'] = 'Various Artists'
         tags['totaltracks'] = playlist[0]['nb_tracks']
@@ -275,20 +297,27 @@ def writeMP3Tags(filename, tags, coverArtId):
             for artist in val[1:]:
                 artists += separator + artist
             handle[key] = artists
+        elif key == 'lyrics':
+             if val['type'] == 'USLT':
+                handle.save()
+                id3Handle = ID3(filename)
+                id3Handle[u"USLT::'eng'"] = (USLT(encoding=3, lang=u'eng', desc=u'USLT', text=val['text']))
+                id3Handle.save(filename)
+                handle.load(filename) # Reload tags
         else:
             handle[key] = str(val)
     handle.save()
+    # Cover art
     if coverArtId:
         image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
-        handle= MP3(filename)
-        handle["APIC"] = mutagen.id3.APIC(
-                                        encoding=3, # 3 is for utf-8
-                                        mime='image/png',
-                                        type=3, # 3 is for the cover image
-                                        data=image)
-        handle.save()
+        id3Handle = ID3(filename)
+        id3Handle['APIC'] = APIC(
+            encoding=3, # 3 is for utf-8
+            mime='image/png',
+            type=3, # 3 is for the cover image
+            data=image)
+        id3Handle.save(filename)
     return True
-
 
 # https://gist.github.com/bgusach/a967e0587d6e01e889fd1d776c5f3729
 def multireplace(string, replacements):
@@ -507,14 +536,18 @@ def getTrack(trackId, playlist=False):
                 coverArtId = privateInfo['ALB_PICTURE']
             else:
                 coverArtId = None
+            if config.getboolean('DEFAULT', 'save lyrics'):
+                if 'lyrics' in tags:
+                    saveLyrics(tags['lyrics'], fullFilenamePath)
+                else:
+                    lyrics = getLyrics(trackId)
+                    saveLyrics(lyrics, fullFilenamePath)
 
             if quality == '9':
                 writeFlacTags(fullFilenamePathExt, tags, coverArtId)
             else:
                 writeMP3Tags(fullFilenamePathExt, tags, coverArtId)
 
-            if config.getboolean('DEFAULT', 'download lyrics'):
-                getLyrics(trackId, fullFilenamePath)
         else:
             return False
     return True
