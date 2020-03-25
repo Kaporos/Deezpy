@@ -142,12 +142,11 @@ def getJSON(mediaType, mediaId, subtype=""):
     url = f'https://api.deezer.com/{mediaType}/{mediaId}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
-def getCoverArt(coverArtId, size):
+def getCoverArt(coverArtId, size, format):
     ''' Retrieves the coverart/playlist image from the official API, and 
         returns it.
     '''
-    _size = size or 500 # Default size
-    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{_size}x{_size}.png'
+    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{size}x{size}.{format}'
     r = requests_retry_session().get(url)
     return r.content
 
@@ -249,9 +248,6 @@ def getArtists(trackInfo):
 
 def writeFlacTags(filename, tags, coverArtId):
     ''' Function to write tags to FLAC file.'''
-    # Download and load the image
-    # cover_xl returns 1000px jpg link,
-    # but 1500px png is available, so we modify url
     try:
         handle = mutagen.File(filename)
     except mutagen.flac.FLACNoHeaderError as error:
@@ -261,10 +257,16 @@ def writeFlacTags(filename, tags, coverArtId):
     handle.delete()  # delete pre-existing tags and pics
     handle.clear_pictures()
     if coverArtId:
-        image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
+        ext = config.get('DEFAULT', 'album art format')
+        image = getCoverArt(coverArtId,
+            config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
+            ext) 
         pic = mutagen.flac.Picture()
         pic.encoding=3
-        pic.mime='image/png'
+        if ext == 'jpg':
+            pic.mime='image/jpeg'
+        else:
+            pic.mime='image/png'
         pic.type=3
         pic.data=image
         handle.add_picture(pic)
@@ -288,7 +290,7 @@ def writeMP3Tags(filename, tags, coverArtId):
     # tracknumber and total tracks is one tag for ID3
     tags['tracknumber'] = f'{str(tags["tracknumber"])}/{str(tags["totaltracks"])}'
     del tags['totaltracks']
-    separator = config.get('DEFAULT', 'artist separator') or ';'
+    separator = config.get('DEFAULT', 'artist separator')
     for key, val in tags.items():
         if key == 'artist':
             # Concatenate artists
@@ -308,11 +310,18 @@ def writeMP3Tags(filename, tags, coverArtId):
     handle.save()
     # Cover art
     if coverArtId:
-        image = getCoverArt(coverArtId, config.getint('DEFAULT', 'embed album art size')) # TODO: write to temp folder?
+        ext = config.get('DEFAULT', 'album art format')
+        image = getCoverArt(coverArtId,
+            config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
+            ext) 
         id3Handle = ID3(filename)
+        if ext == 'jpg':
+            mime='image/jpeg'
+        else:
+            mime='image/png'
         id3Handle['APIC'] = APIC(
             encoding=3, # 3 is for utf-8
-            mime='image/png',
+            mime=mime,
             type=3, # 3 is for the cover image
             data=image)
         id3Handle.save(filename)
@@ -581,10 +590,12 @@ def downloadDeezer(url):
         # Save album cover art
         if config.getboolean('DEFAULT', 'save album art'):
             coverArtId = info['cover_small'].split('/')[-2]
-            image = getCoverArt(coverArtId, config.getint('DEFAULT', 'album art size'))
+            ext = config.get('DEFAULT', 'album art format')
+            image = getCoverArt(coverArtId,
+                config.getint('DEFAULT', 'album art size'),
+                ext)
             filename = nameFile(trackInfo=None, albInfo=info, playlistInfo=None)
-            print(filename)
-            saveCoverArt(image, filename)
+            saveCoverArt(image, f'{filename}.{ext}')
         if mediaType == 'album':
             print(f"\n{info['artist']['name']} - {info['title']}")
         info = getJSON(mediaType, mediaId, subtype)
