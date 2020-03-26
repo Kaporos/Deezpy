@@ -32,6 +32,7 @@ from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, USLT, APIC
 from mutagen.mp3 import MP3
 from requests.packages.urllib3.util.retry import Retry
+from pathvalidate import sanitize_filename
 
 
 session = requests.Session()
@@ -384,17 +385,19 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Date>'         : albInfo['release_date'],
             '<Year>'         : albInfo['release_date'].split('-')[0],
         }
-    for key, val in replacedict.items():
-        # Removes any forbidden filename chars
-        # <>:"|?*/\
-        val = re.sub(r'[<>:\"|\?\*/\\]', '_', val)
-        # folder dirs and the filename are now max 250 bytes long:
-        val = val.encode('utf-8')[:250].decode('utf-8', 'ignore')
-        replacedict[key] = val
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
-    return filename
+    return sanitize_path_parts(filename)
 
+def sanitize_path_parts(path):
+    separator = '/'
+    if platform.system() == 'Windows':
+        separator = '\\'
+    parts = path.split(separator)
+    for i in range(len(parts)):
+        parts[i] = sanitize_filename(filename=parts[i], replacement_text='_', platform='universal')
+    # Join parts
+    return separator.join(parts)
 
 def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
