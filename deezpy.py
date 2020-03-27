@@ -369,9 +369,10 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
         }
     else: # Album cover template
         trackPath = config.get('DEFAULT','naming template')
-        if trackPath.endswith('/'):
+        separator = getPathSeparator()
+        if trackPath.endswith(separator):
             trackPath = trackPath[:-1]
-        match = re.search(r'.*/', trackPath)
+        match = re.search(rf'.*{separator}', trackPath)
         if match: # Nested template
             pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
         else:
@@ -392,6 +393,9 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
     return sanitize_path_parts(filename)
+
+def getPathSeparator():
+    return '\\' if platform.system() == 'Windows' else '/'
 
 def sanitize_path_parts(path):
     separator = '/'
