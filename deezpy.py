@@ -385,6 +385,10 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Date>'         : albInfo['release_date'],
             '<Year>'         : albInfo['release_date'].split('-')[0],
         }
+    # remove back/forward slashes before sanitizing path
+    for key in replacedict:
+        replacedict[key] = replacedict[key].replace('/', '_')
+        replacedict[key] = replacedict[key].replace('\\', '_')
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
     return sanitize_path_parts(filename)
