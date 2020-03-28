@@ -561,7 +561,7 @@ def interactiveMode():
     # item['EXPLICIT_ALBUM_CONTENT']['EXPLICIT_LYRICS_STATUS']:
     # 1 if lyrics contain cuss words, 2 if ?, 3 if ?, 4 if ?
     # same for item['EXPLICIT_TRACK_CONTENT']['EXPLICIT_LYRICS_STATUS']
-    print("\nSelect download type\n1) Track\n2) Album\n3) Artist")
+    print("\nSelect download type\n1) Track\n2) Album\n3) Artist\nq) Quit")
     itemLut = {
         '1': {
             'selector': 'TRACK',
@@ -591,6 +591,8 @@ def interactiveMode():
     }
     items = []
     itemType = input("Choice: ")
+    if itemType == 'q':
+        exit()
     if itemType not in [str(n) for n in range(1, 4)]:
         print("Invalid option.")
         return
