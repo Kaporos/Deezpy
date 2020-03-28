@@ -50,7 +50,7 @@ httpHeaders = {
         }
 session.headers.update(httpHeaders)
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Deezpy - Download and decrypt Deezer files. For updates, visit https://notabug.org/deezpy-dev/Deezpy.")
 parser.add_argument('-l', "--link", dest="link", help="Downloads a given Deezer URL")
 parser.add_argument('-ll', "--linkloop", dest="linkloop", action='store_true', help="Starts a loop which continiously asks for new links")
 parser.add_argument('-b', "--batch", dest="batchfile", nargs='?', const="downloads.txt", help="Downloads links from a textfile. Default value: downloads.txt")
