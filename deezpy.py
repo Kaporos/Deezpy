@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (C) 2019  Deezpy contributors
 
@@ -29,8 +29,10 @@ import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3, USLT, APIC
 from mutagen.mp3 import MP3
 from requests.packages.urllib3.util.retry import Retry
+from pathvalidate import sanitize_filename
 
 
 session = requests.Session()
@@ -141,37 +143,35 @@ def getJSON(mediaType, mediaId, subtype=""):
     url = f'https://api.deezer.com/{mediaType}/{mediaId}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
-
-def getCoverArt(artID, filename, size):
-    ''' Retrieves the coverart/playlist image from the official API,
-        downloads it to the download folder and returns it.
+def getCoverArt(coverArtId, size, format):
+    ''' Retrieves the coverart/playlist image from the official API, and 
+        returns it.
     '''
-    url = f'https://e-cdns-images.dzcdn.net/images/cover/{artID}/{size}x{size}.png'
+    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{size}x{size}.{format}'
+    r = requests_retry_session().get(url)
+    return r.content
+
+def saveCoverArt(image, filename):
     path = os.path.dirname(filename)
-    imageFile = f'{path}/cover.png'
     if not os.path.isdir(path):
         os.makedirs(path)
-    if os.path.isfile(imageFile):
-        with open(imageFile, 'rb') as f:
+    if os.path.isfile(filename):
+        with open(filename, 'rb') as f:
             return f.read()
     else:
-        with open(imageFile, 'wb') as f:
-            r = requests_retry_session().get(url)
-            f.write(r.content)
-            return r.content
+        with open(filename, 'wb') as f:
+            f.write(image)
 
 
-def getLyrics(trackId, filename):
+def getLyrics(trackId):
     ''' Recieves (timestamped) lyrics from the unofficial api
-        and converts them to a conventional .lrc file.
-        If only the unsynced lyrics are found, these are written
-        to a .txt file.
+        and returns them
     '''
     req = apiCall('song.getLyrics', {'sng_id': trackId})
+    lyrics = {}
     if 'LYRICS_SYNC_JSON' in req: # synced lyrics
         rawLyrics = req['LYRICS_SYNC_JSON']
-        ext = '.lrc'
-        lyrics = []
+        syncedLyrics = ''
         for lyricLine in rawLyrics:
             try:
                 time = lyricLine['lrc_timestamp']
@@ -181,16 +181,31 @@ def getLyrics(trackId, filename):
                 line = lyricLine['line']
                 lyricLine = f'{time}{" "}{line}'
             finally:
-                lyrics.append(lyricLine + '\n') # TODO add duration?
-    elif 'LYRICS_TEXT' in req: # unsynced lyrics
-        lyrics = req['LYRICS_TEXT'].splitlines(True) # True keeps the \n
-        ext = '.txt'
-    else:
-        return False
-    with open(f'{filename}{ext}', 'a') as f:
-        for lyricLine in lyrics:
-            f.write(lyricLine)
+                syncedLyrics += lyricLine + '\n' # TODO add duration?
+        lyrics['sylt'] = syncedLyrics 
+    if 'LYRICS_TEXT' in req: # unsynced lyrics
+        lyrics['uslt'] = req['LYRICS_TEXT']
+    return lyrics
 
+def saveLyrics(lyrics, filename):
+    ''' Writes synced or unsynced lyrics to file
+    '''
+    if not (lyrics and filename):
+        return False
+    
+    lyricsType = 'uslt'
+    if 'sylt' in lyrics:
+        ext = 'lrc'
+        lyricsType = 'sylt'
+    elif 'uslt' in lyrics:
+        ext = 'txt'
+    else:
+        raise ValueError('Unknown lyrics type')
+    
+    with open(f'{filename}.{ext}', 'a') as f:
+        for line in lyrics[lyricsType]:
+            f.write(line)
+    return True
 
 def getTags(trackInfo, albInfo, playlist):
     ''' Combines tag info in one dict. '''
@@ -205,13 +220,17 @@ def getTags(trackInfo, albInfo, playlist):
         'tracknumber' : trackInfo['track_position'],
         'album'       : trackInfo['album']['title'],
         'date'        : trackInfo['album']['release_date'],
-        'artist'      : trackInfo['artist']['name'],
+        'artist'      : getArtists(trackInfo),
         'bpm'         : trackInfo['bpm'],
         'albumartist' : albInfo['artist']['name'],
         'totaltracks' : albInfo['nb_tracks'],
         'label'       : albInfo['label'],
         'genre'       : genre
         }
+    if config.getboolean('DEFAULT', 'embed lyrics'):
+        lyrics = getLyrics(trackInfo['id'])
+        if (lyrics):
+            tags['lyrics'] = lyrics
     if playlist: # edit some info to get playlist suitable tags
         tags['title'] = 'Various Artists'
         tags['totaltracks'] = playlist[0]['nb_tracks']
@@ -222,12 +241,14 @@ def getTags(trackInfo, albInfo, playlist):
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     return tags
 
+def getArtists(trackInfo):
+    artists = []
+    for artist in trackInfo['contributors']:
+        artists.append(artist['name'])
+    return artists
 
-def writeFlacTags(filename, tags, imageUrl):
-    ''' Function to write tags to the file, be it FLAC or MP3.'''
-    # Download and load the image
-    # cover_xl returns 1000px jpg link,
-    # but 1500px png is available, so we modify url
+def writeFlacTags(filename, tags, coverArtId):
+    ''' Function to write tags to FLAC file.'''
     try:
         handle = mutagen.File(filename)
     except mutagen.flac.FLACNoHeaderError as error:
@@ -236,22 +257,33 @@ def writeFlacTags(filename, tags, imageUrl):
         return False
     handle.delete()  # delete pre-existing tags and pics
     handle.clear_pictures()
-    if imageUrl:
-        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
+    if coverArtId:
+        ext = config.get('DEFAULT', 'album art format')
+        image = getCoverArt(coverArtId,
+            config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
+            ext) 
         pic = mutagen.flac.Picture()
         pic.encoding=3
-        pic.mime='image/png'
+        if ext == 'jpg':
+            pic.mime='image/jpeg'
+        else:
+            pic.mime='image/png'
         pic.type=3
         pic.data=image
         handle.add_picture(pic)
-
     for key, val in tags.items():
-        handle[key] = str(val)
+        if key == 'artist':
+            handle[key] = val # Handle multiple artists
+        elif key == 'lyrics':
+            if 'uslt' in val: # unsynced lyrics
+                handle['lyrics'] = val['uslt']
+        else:
+            handle[key] = str(val)
     handle.save()
     return True
 
 
-def writeMP3Tags(filename, tags, imageUrl):
+def writeMP3Tags(filename, tags, coverArtId):
     handle = MP3(filename, ID3=EasyID3)
     handle.delete()
     # label is not supported by easyID3, so we add it
@@ -259,21 +291,42 @@ def writeMP3Tags(filename, tags, imageUrl):
     # tracknumber and total tracks is one tag for ID3
     tags['tracknumber'] = f'{str(tags["tracknumber"])}/{str(tags["totaltracks"])}'
     del tags['totaltracks']
-
+    separator = config.get('DEFAULT', 'artist separator')
     for key, val in tags.items():
-        handle[key] = str(val)
+        if key == 'artist':
+            # Concatenate artists
+            artists = val[0] # Main artist
+            for artist in val[1:]:
+                artists += separator + artist
+            handle[key] = artists
+        elif key == 'lyrics':
+            if 'uslt' in val: # unsynced lyrics
+                handle.save()
+                id3Handle = ID3(filename)
+                id3Handle['USLT'] = USLT(encoding=3, text=val['uslt'])
+                id3Handle.save(filename)
+                handle.load(filename) # Reload tags
+        else:
+            handle[key] = str(val)
     handle.save()
-    if imageUrl:
-        image = getCoverArt(imageUrl, filename, 1500) # TODO: write to temp folder?
-        handle= MP3(filename)
-        handle["APIC"] = mutagen.id3.APIC(
-                                        encoding=3, # 3 is for utf-8
-                                        mime='image/png',
-                                        type=3, # 3 is for the cover image
-                                        data=image)
-        handle.save()
+    # Cover art
+    if coverArtId:
+        ext = config.get('DEFAULT', 'album art format')
+        image = getCoverArt(coverArtId,
+            config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
+            ext) 
+        id3Handle = ID3(filename)
+        if ext == 'jpg':
+            mime='image/jpeg'
+        else:
+            mime='image/png'
+        id3Handle['APIC'] = APIC(
+            encoding=3, # 3 is for utf-8
+            mime=mime,
+            type=3, # 3 is for the cover image
+            data=image)
+        id3Handle.save(filename)
     return True
-
 
 # https://gist.github.com/bgusach/a967e0587d6e01e889fd1d776c5f3729
 def multireplace(string, replacements):
@@ -299,7 +352,7 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<Track#>'         : f'{playlistInfo[1]:02d}',
             '<Title>'          : trackInfo['title']
         }
-    else:
+    elif trackInfo:
         pathspec = config.get('DEFAULT','naming template')
         replacedict = {
             '<Album Artist>' : albInfo['artist']['name'],
@@ -314,17 +367,45 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
             '<UPC>'          : albInfo['upc'],
             '<Record Type>'  : albInfo['record_type']
         }
-    for key, val in replacedict.items():
-        # Removes any forbidden filename chars
-        # <>:"|?*/\
-        val = re.sub(r'[<>:\"|\?\*/\\]', '_', val)
-        # folder dirs and the filename are now max 250 bytes long:
-        val = val.encode('utf-8')[:250].decode('utf-8', 'ignore')
-        replacedict[key] = val
+    else: # Album cover template
+        trackPath = config.get('DEFAULT','naming template')
+        separator = getPathSeparator()
+        if trackPath.endswith(separator):
+            trackPath = trackPath[:-1]
+        match = re.search(rf'.*{separator}', trackPath)
+        if match: # Nested template
+            pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
+        else:
+            pathspec = config.get('DEFAULT','album art naming template')
+        replacedict = {
+            '<Album Artist>' : albInfo['artist']['name'],
+            '<Label>'        : albInfo['label'],
+            '<UPC>'          : albInfo['upc'],
+            '<Record Type>'  : albInfo['record_type'],
+            '<Album>'        : albInfo['title'],
+            '<Date>'         : albInfo['release_date'],
+            '<Year>'         : albInfo['release_date'].split('-')[0],
+        }
+    # remove back/forward slashes before sanitizing path
+    for key in replacedict:
+        replacedict[key] = replacedict[key].replace('/', '_')
+        replacedict[key] = replacedict[key].replace('\\', '_')
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
-    return filename
+    return sanitize_path_parts(filename)
 
+def getPathSeparator():
+    return '\\' if platform.system() == 'Windows' else '/'
+
+def sanitize_path_parts(path):
+    separator = '/'
+    if platform.system() == 'Windows':
+        separator = '\\'
+    parts = path.split(separator)
+    for i in range(len(parts)):
+        parts[i] = sanitize_filename(filename=parts[i], replacement_text='_', platform='universal')
+    # Join parts
+    return separator.join(parts)
 
 def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
@@ -471,17 +552,21 @@ def getTrack(trackId, playlist=False):
         if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey):
             tags = getTags(trackInfo, albInfo, playlist)
             if config.getboolean('DEFAULT', 'embed album art'):
-                imageUrl = privateInfo['ALB_PICTURE']
+                coverArtId = privateInfo['ALB_PICTURE']
             else:
-                imageUrl = None
+                coverArtId = None
+            if config.getboolean('DEFAULT', 'save lyrics'):
+                if 'lyrics' in tags:
+                    saveLyrics(tags['lyrics'], fullFilenamePath)
+                else:
+                    lyrics = getLyrics(trackId)
+                    saveLyrics(lyrics, fullFilenamePath)
 
             if quality == '9':
-                writeFlacTags(fullFilenamePathExt, tags, imageUrl)
+                writeFlacTags(fullFilenamePathExt, tags, coverArtId)
             else:
-                writeMP3Tags(fullFilenamePathExt, tags, imageUrl)
+                writeMP3Tags(fullFilenamePathExt, tags, coverArtId)
 
-            if config.getboolean('DEFAULT', 'download lyrics'):
-                getLyrics(trackId, fullFilenamePath)
         else:
             return False
     return True
@@ -513,6 +598,15 @@ def downloadDeezer(url):
     else:
         subtype = 'albums' if mediaType == 'artist' else 'tracks'
         info = getJSON(mediaType, mediaId)
+        # Save album cover art
+        if config.getboolean('DEFAULT', 'save album art'):
+            coverArtId = info['cover_small'].split('/')[-2]
+            ext = config.get('DEFAULT', 'album art format')
+            image = getCoverArt(coverArtId,
+                config.getint('DEFAULT', 'album art size'),
+                ext)
+            filename = nameFile(trackInfo=None, albInfo=info, playlistInfo=None)
+            saveCoverArt(image, f'{filename}.{ext}')
         if mediaType == 'album':
             print(f"\n{info['artist']['name']} - {info['title']}")
         info = getJSON(mediaType, mediaId, subtype)
