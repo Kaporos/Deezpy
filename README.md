@@ -1,14 +1,18 @@
 # Deezpy - A Deezer track downloader for the commandline
 Deezpy is a Deezer track downloader and decrypter, written in Python 3.
-It is made to be a minimal and open Deezer downloader, with no obfuscated code. Deezpy is commandline only so it is very lightweight, only around 600 lines of code. And there is still room for improvement.
+It is made to be a minimal and open Deezer downloader, with no obfuscated code. Deezpy is commandline only so it is very lightweight, and there is still room for improvement.
 
 ## Installation
-To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography` and `mutagen`.
-You can install them with: `pip install requests cryptography mutagen` or via the packagemanager of your choice.
+To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography`, `mutagen` and `pathvalidate`.
+You can install them with: `pip install requests cryptography mutagen pathvalidate` or via the packagemanager of your choice.
 
 After this, you can just download and run the script like any other Python script.
 
-Before you can run Deezpy you must make a config file, or download the template config file from the repo. Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS. If you have Windows, this is in `%APPDATA%`, for macOs and Linux, this is in `.config`. If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
+Before you can run Deezpy you must make a config file, or download the template config file from the repo. Deezpy searches for a `deezpyrc` configuration file in the relevant config folder for your OS.
+
+If you have Windows, this is in `%APPDATA%`, for macOs and Linux, this is in `.config`.
+
+If it can't find a config file there, it searches the folder from where you run the script from. By default, Deezpy generates the download directories in the directory from where you run the script, so it is recommended to run Deezpy inside a new directory. You can change the downloadpath to a path outside the Deezpy folder by editing `deezpyrc`. Beyond these, no other config files or temporary files are created.
 
 ## Running the script
 There are two ways you can interact with the script: via an interactive mode or via commandline options.
