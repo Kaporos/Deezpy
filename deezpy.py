@@ -200,7 +200,7 @@ def getLyrics(trackId):
                 syncedLyrics += lyricLine + '\n' # TODO add duration?
         lyrics['sylt'] = syncedLyrics 
     if 'LYRICS_TEXT' in req: # unsynced lyrics
-        lyrics['uslt'] = req['LYRICS_TEXT']
+        lyrics['uslt'] = req['LYRICS_TEXT'].replace('\r', '')
     return lyrics
 
 def saveLyrics(lyrics, filename):
