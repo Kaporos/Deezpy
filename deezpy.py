@@ -77,6 +77,21 @@ def apiCall(method, json_req=False):
     return req['results']
 
 
+def loginUserToken(token):
+    ''' Handles userToken for settings file, for initial setup.
+        If no USER_ID is found, False is returned and thus the
+        cookie arl is wrong. Instructions for obtaining your arl
+        string are in the README.md
+    '''
+    cookies = {'arl': token}
+    session.cookies.update(cookies)
+    req = apiCall('deezer.getUserData')
+    #if not req['results']['USER']['USER_ID']:
+    #    return False
+    #else:
+    #    return True
+
+
 def getTokens():
     req = apiCall('deezer.getUserData')
     global CSRFToken
@@ -108,7 +123,8 @@ def privateApi(songId):
     ''' Get the required info from the hidden mobile api
         to decrypt the files.
     '''
-    req = mobileApiCall('song_getData', {'SNG_ID': songId})
+    req = apiCall('deezer.pageTrack', {'SNG_ID': songId})
+#    req = mobileApiCall('song_getData', {'SNG_ID': songId}) #deprecated
 #    if "FALLBACK" in req:
         # Some songs in a playlist have other IDs than the same song
         # in an album/artist page. These ids from songs in a playlist
@@ -116,7 +132,7 @@ def privateApi(songId):
 #        songId = privateInfo["FALLBACK"]['SNG_ID']
         # we need to replace the track with the FALLBACK one
 #        privateInfo = privateApi(songId)
-    return req
+    return req['DATA']
 
 
 # https://www.peterbe.com/plog/best-practice-with-retries-with-requests
@@ -409,11 +425,11 @@ def sanitize_path_parts(path):
 
 def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
-        a given PUID (MD5 hash), SNG_ID and MEDIA_VERSION.
+        a given MD5_ORIGIN (MD5 hash), SNG_ID and MEDIA_VERSION.
     '''
     # this specific unicode char is needed
     char = b'\xa4'.decode('unicode_escape')
-    step1 = char.join((privateInfo['PUID'],
+    step1 = char.join((privateInfo['MD5_ORIGIN'],
                       quality, privateInfo['SNG_ID'],
                       privateInfo['MEDIA_VERSION']))
     m = hashlib.md5()
@@ -424,7 +440,7 @@ def getTrackDownloadUrl(privateInfo, quality):
                     modes.ECB(), default_backend())
     encryptor = cipher.encryptor()
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
-    cdn = privateInfo['PUID'][0]
+    cdn = privateInfo['MD5_ORIGIN'][0]
     decryptedUrl = f'https://e-cdns-proxy-{cdn}.dzcdn.net/mobile/1/{step3}'
     return decryptedUrl
 
@@ -727,6 +743,7 @@ def interactiveMode():
 
 
 def init():
+    loginUserToken(config.get('DEFAULT', 'User token'))
     getTokens()
 
 
