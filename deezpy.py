@@ -32,7 +32,7 @@ from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, USLT, APIC
 from mutagen.mp3 import MP3
 from requests.packages.urllib3.util.retry import Retry
-from pathvalidate import sanitize_filename
+from pathvalidate import sanitize_filepath
 
 
 session = requests.Session()
@@ -349,13 +349,19 @@ def multireplace(string, replacements):
     ''' Given a string and a replacement map,
         it returns the replaced string.
     '''
+    # remove back/forward slashes before replacing
+    for key in replacements:
+        replacements[key] = replacements[key].replace('/', '_')
+        replacements[key] = replacements[key].replace('\\', '_')
     # Sorts the dict so that longer ones first to keep shorter substrings
     # from matching where the longer ones should take place
     substrs = sorted(replacements, key=len, reverse=True)
     # Create a big OR regex that matches any of the substrings to replace
     regexp = re.compile('|'.join(map(re.escape, substrs)))
     # For each match, look up the new string in the replacements
-    return regexp.sub(lambda match: replacements[match.group(0)], string)
+    replacedString = regexp.sub(lambda match: replacements[match.group(0)], string)
+    filename = sanitize_filepath(file_path=replacedString, replacement_text='_', platform='universal')
+    return filename
 
 
 def nameFile(trackInfo, albInfo, playlistInfo=False):
@@ -408,20 +414,12 @@ def nameFile(trackInfo, albInfo, playlistInfo=False):
         replacedict[key] = replacedict[key].replace('\\', '_')
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
-    return sanitize_path_parts(filename)
+    return filename
+
 
 def getPathSeparator():
     return '\\' if platform.system() == 'Windows' else '/'
 
-def sanitize_path_parts(path):
-    separator = '/'
-    if platform.system() == 'Windows':
-        separator = '\\'
-    parts = path.split(separator)
-    for i in range(len(parts)):
-        parts[i] = sanitize_filename(filename=parts[i], replacement_text='_', platform='universal')
-    # Join parts
-    return separator.join(parts)
 
 def getTrackDownloadUrl(privateInfo, quality):
     ''' Calculates the deezer download URL from
@@ -743,7 +741,7 @@ def interactiveMode():
 
 
 def init():
-    loginUserToken(config.get('DEFAULT', 'User token'))
+    loginUserToken(config.get('DEFAULT', 'user token'))
     getTokens()
 
 
