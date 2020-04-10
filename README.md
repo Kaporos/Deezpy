@@ -4,7 +4,9 @@ It is made to be a minimal and open Deezer downloader, with no obfuscated code. 
 
 ## Installation
 To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography`, `mutagen` and `pathvalidate`.
-You can install them with: `pip install requests cryptography mutagen pathvalidate` or via the packagemanager of your choice.
+You can install them by running `pip install -r requirements.txt` in the deezpy folder
+
+Running `pip install requests cryptography mutagen pathvalidate` or using the packagemanager of your choice is also an option.
 
 After this, you can just download and run the script like any other Python script.
 
