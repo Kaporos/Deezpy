@@ -22,7 +22,6 @@ import hashlib
 import os
 import re
 import platform
-import sys
 
 # third party libraries:
 import mutagen
@@ -87,10 +86,10 @@ def loginUserToken(token):
     cookies = {'arl': token}
     session.cookies.update(cookies)
     req = apiCall('deezer.getUserData')
-    #if not req['results']['USER']['USER_ID']:
-    #    return False
-    #else:
-    #    return True
+    if not req['results']['USER']['USER_ID']:
+        return False
+    else:
+        return True
 
 
 def getTokens():
@@ -160,6 +159,7 @@ def getJSON(mediaType, mediaId, subtype=""):
     url = f'https://api.deezer.com/{mediaType}/{mediaId}/{subtype}?limit=-1'
     return requests_retry_session().get(url).json()
 
+
 def getCoverArt(coverArtId, size, format):
     ''' Retrieves the coverart/playlist image from the official API, and 
         returns it.
@@ -167,6 +167,7 @@ def getCoverArt(coverArtId, size, format):
     url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{size}x{size}.{format}'
     r = requests_retry_session().get(url)
     return r.content
+
 
 def saveCoverArt(image, filename):
     path = os.path.dirname(filename)
@@ -612,7 +613,7 @@ def downloadDeezer(url):
         playlistInfo = getJSON(mediaType, mediaId)
         ids = [x["id"] for x in playlistInfo['tracks']['data']]
         playlistTrack = 1
-        for trackId in ids:
+        for trackId in ids: # TODO add download indicators
             playlist = (playlistInfo, playlistTrack)
             getTrack(trackId, playlist)
             playlistTrack += 1
@@ -628,7 +629,7 @@ def downloadDeezer(url):
                 ext)
             filename = nameFile(trackInfo=None, albInfo=info, playlistInfo=None)
             saveCoverArt(image, f'{filename}.{ext}')
-        if mediaType == 'album':
+        if mediaType == 'album': # TODO add download indicators
             print(f"\n{info['artist']['name']} - {info['title']}")
         info = getJSON(mediaType, mediaId, subtype)
         urls = [x["link"] for x in info['data']]
@@ -748,7 +749,9 @@ def interactiveMode():
 
 
 def init():
-    loginUserToken(config.get('DEFAULT', 'user token'))
+    if not loginUserToken(config.get('DEFAULT', 'user token')):
+        print("Not logged in. Maybe the arl token has expired?")
+        exit()
     getTokens()
 
 
@@ -769,4 +772,3 @@ if __name__ == '__main__':
            "\nPlease consider supporting the artists!"))
         while True:
             interactiveMode()
-
