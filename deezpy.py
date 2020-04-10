@@ -396,10 +396,9 @@ def nameFile(trackInfo, albInfo, playlistInfo=False): #TODO clean this mess!
         }
     else: # Album cover template
         trackPath = config.get('DEFAULT','naming template')
-        separator = getPathSeparator()
-        if trackPath.endswith(separator):
+        if trackPath.endswith('/'):
             trackPath = trackPath[:-1]
-        match = re.search(rf'.*{separator}', trackPath)
+        match = re.search(r'.*/', trackPath)
         if match: # Nested template
             pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
         else:
@@ -420,10 +419,6 @@ def nameFile(trackInfo, albInfo, playlistInfo=False): #TODO clean this mess!
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
     return filename
-
-
-def getPathSeparator():
-    return '\\' if platform.system() == 'Windows' else '/'
 
 
 def getTrackDownloadUrl(privateInfo, quality):
@@ -473,8 +468,8 @@ def getBlowfishKey(trackId):
 
 
 def printPercentage(text, sizeOnDisk, totalFileSize):
-    percentage = (sizeOnDisk / totalFileSize)*100
-    print("\r{} [{:0.2f}%]".format(text, percentage), end='')
+    percentage = round((sizeOnDisk / totalFileSize)*100)
+    print("\r{} [{:d}%]".format(text, percentage), end='')
 
 
 def decryptChunk(chunk, bfKey):
@@ -523,6 +518,7 @@ def downloadTrack(filename, ext, url, bfKey):
             fd.write(chunk)
             i += 1
     os.rename(tmpFile, realFile)
+    print('')
     return True
 
 
@@ -623,7 +619,6 @@ def downloadDeezer(url):
     else:
         subtype = 'albums' if mediaType == 'artist' else 'tracks'
         info = getJSON(mediaType, mediaId)
-        print(info)
         # Save album cover art
         if config.getboolean('DEFAULT', 'save album art'):
             coverArtId = info['cover_small'].split('/')[-2]
