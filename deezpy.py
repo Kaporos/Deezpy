@@ -562,9 +562,6 @@ def getTrack(trackId, playlist=False):
     '''
     trackInfo = getJSON('track', trackId)
     albInfo = getJSON('album', trackInfo['album']['id'])
-    #if not trackInfo['readable']:
-    #    print(f"Song {trackInfo['title']} not available, skipping...")
-    #    return False
     privateInfo = privateApi(trackId)
     quality = getQuality(privateInfo)
     if not quality:
@@ -578,33 +575,32 @@ def getTrack(trackId, playlist=False):
     else:
         fullFilenamePath = nameTrack(trackInfo, albInfo)
 
-    fullFilenamePathExt = f'{fullFilenamePath}{ext}'
-    if os.path.isfile(fullFilenamePathExt):
-        print(f"{fullFilenamePathExt} already exists!")
+    if os.path.isfile(f'{fullFilenamePath}{ext}'):
+        print(f"{f'{fullFilenamePath}{ext}'} already exists!")
         return False
-    else:
-        decryptedUrl = getTrackDownloadUrl(privateInfo, quality)
-        bfKey = getBlowfishKey(privateInfo['SNG_ID'])
-        if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey):
-            tags = getTags(trackInfo, albInfo, playlist)
-            if config.getboolean('DEFAULT', 'embed album art'):
-                coverArtId = privateInfo['ALB_PICTURE']
-            else:
-                coverArtId = None
-            if config.getboolean('DEFAULT', 'save lyrics'):
-                if 'lyrics' in tags:
-                    saveLyrics(tags['lyrics'], fullFilenamePath)
-                else:
-                    lyrics = getLyrics(trackId)
-                    saveLyrics(lyrics, fullFilenamePath)
 
-            if quality == '9':
-                writeFlacTags(fullFilenamePathExt, tags, coverArtId)
-            else:
-                writeMP3Tags(fullFilenamePathExt, tags, coverArtId)
-
+    decryptedUrl = getTrackDownloadUrl(privateInfo, quality)
+    bfKey = getBlowfishKey(privateInfo['SNG_ID'])
+    if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey): # Track downloaded successfully
+        tags = getTags(trackInfo, albInfo, playlist)
+        if config.getboolean('DEFAULT', 'embed album art'):
+            coverArtId = privateInfo['ALB_PICTURE']
         else:
-            return False
+            coverArtId = None
+        if config.getboolean('DEFAULT', 'save lyrics'):
+            if 'lyrics' in tags:
+                saveLyrics(tags['lyrics'], fullFilenamePath)
+            else:
+                lyrics = getLyrics(trackId)
+                saveLyrics(lyrics, fullFilenamePath)
+
+        if quality == '9':
+            writeFlacTags(f'{fullFilenamePath}{ext}', tags, coverArtId)
+        else:
+            writeMP3Tags(f'{fullFilenamePath}{ext}', tags, coverArtId)
+
+    else:
+        return False
     return True
 
 
@@ -623,7 +619,7 @@ def getAlbum(mediaId):
     print(f"\n{albumInfo['artist']['name']} - {albumInfo['title']}")
 
     urls = [x['link'] for x in albumInfo['tracks']['data']]
-    [downloadDeezer(url) for url in urls] # extract + download track urls
+    [downloadDeezer(url) for url in urls] # extract + download track urls (via getTrack())
 
     if config.getboolean('DEFAULT', 'save album art'):
         coverArtId = albumInfo['cover_small'].split('/')[-2]
@@ -638,7 +634,7 @@ def getAlbum(mediaId):
 def getArtist(mediaId):
     artistInfo = getJSON('artist', mediaId, subtype='albums')
     urls = [x["link"] for x in artistInfo['data']] #extract + download album urls
-    [downloadDeezer(url) for url in urls]
+    [downloadDeezer(url) for url in urls] # urls go back into downloadDeezer for further extraction
 
 
 def downloadDeezer(url):
@@ -655,7 +651,7 @@ def downloadDeezer(url):
         getTrack(mediaId)
 
     elif mediaType == 'playlist':
-        getPlaylist(info)
+        getPlaylist(mediaId)
 
     elif mediaType == 'album':
         getAlbum(mediaId)
@@ -705,7 +701,7 @@ def interactiveMode():
     # item['EXPLICIT_ALBUM_CONTENT']['EXPLICIT_LYRICS_STATUS']:
     # 1 if lyrics contain cuss words, 2 if ?, 3 if ?, 4 if ?
     # same for item['EXPLICIT_TRACK_CONTENT']['EXPLICIT_LYRICS_STATUS']
-    print("\nSelect download type\n1) Track\n2) Album\n3) Artist\nq) Quit")
+    print("\nSelect download type\n1) Track\n2) Album\n3) Artist\n4) Playlist\nq) Quit")
     itemLut = {
         '1': {
             'selector': 'TRACK',
@@ -714,7 +710,7 @@ def interactiveMode():
                                        item['ART_NAME'], item['ALB_TITLE'],
                                        '[explicit]' if item['EXPLICIT_TRACK_CONTENT']['EXPLICIT_LYRICS_STATUS'] == 1 else ''),
             'type': 'song',
-            'url': lambda item : f'https://www.deezer.com/en/track/{item["SNG_ID"]}'
+            'url': lambda item : f'https://www.deezer.com/track/{item["SNG_ID"]}'
         },
         '2': {
             'selector': 'ALBUM',
@@ -723,21 +719,28 @@ def interactiveMode():
                                        item['ART_NAME'],
                                        '[explicit]' if item['EXPLICIT_ALBUM_CONTENT']['EXPLICIT_LYRICS_STATUS'] == 1 else ''),
             'type': 'album',
-            'url': lambda item : f'https://www.deezer.com/en/album/{item["ALB_ID"]}'
+            'url': lambda item : f'https://www.deezer.com/album/{item["ALB_ID"]}'
         },
         '3': {
             'selector': 'ARTIST',
             'string': '{0}) {1}',
             'tuple': lambda i, item : (str(i+1), item['ART_NAME']),
             'type': 'artist',
-            'url': lambda item : f'https://www.deezer.com/en/artist/{item["ART_ID"]}'
+            'url': lambda item : f'https://www.deezer.com/artist/{item["ART_ID"]}'
+        },
+        '4': {
+            'selector': 'PLAYLIST',
+            'string': '{0}) {1} / {2} songs',
+            'tuple': lambda i, item : (str(i+1), item['TITLE'], item['NB_SONG']),
+            'type': 'playlist',
+            'url': lambda item : f'https://www.deezer.com/playlist/{item["PLAYLIST_ID"]}'
         }
     }
     items = []
     itemType = input("Choice: ")
     if itemType == 'q':
         exit()
-    if itemType not in [str(n) for n in range(1, 4)]:
+    if itemType not in [str(n) for n in range(1, 5)]:
         print("Invalid option.")
         return
     maxResults = 20
@@ -745,9 +748,8 @@ def interactiveMode():
     if searchTerm == "":
         print("Invalid query.")
         return
-    # selector can be 'TOP_RESULT', 'TRACK', 'ARTIST', 'ALBUM', 'PLAYLIST', 'RADIO', 'CHANNEL', 'SHOW', 'EPISODE', 'LIVESTREAM', 'USER'
     res = apiCall('deezer.suggest', {'NB': maxResults, 'QUERY': searchTerm, 'TYPES': {
-        itemLut[itemType]['selector']: True
+        itemLut[itemType]['selector']: True # selector can be 'TOP_RESULT', 'TRACK', 'ARTIST', 'ALBUM', 'PLAYLIST', 'RADIO', 'CHANNEL', 'SHOW', 'EPISODE', 'LIVESTREAM', 'USER'
     }})
     if len(res['TOP_RESULT']) > 0 and res['TOP_RESULT'][0]['__TYPE__'] == itemLut[itemType]['type']:
         items += res['TOP_RESULT']
