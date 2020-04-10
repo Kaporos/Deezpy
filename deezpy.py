@@ -22,6 +22,7 @@ import hashlib
 import os
 import re
 import platform
+import sys
 
 # third party libraries:
 import mutagen
@@ -203,6 +204,7 @@ def getLyrics(trackId):
         lyrics['uslt'] = req['LYRICS_TEXT'].replace('\r', '')
     return lyrics
 
+
 def saveLyrics(lyrics, filename):
     ''' Writes synced or unsynced lyrics to file
     '''
@@ -222,6 +224,7 @@ def saveLyrics(lyrics, filename):
         for line in lyrics[lyricsType]:
             f.write(line)
     return True
+
 
 def getTags(trackInfo, albInfo, playlist):
     ''' Combines tag info in one dict. '''
@@ -257,11 +260,13 @@ def getTags(trackInfo, albInfo, playlist):
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     return tags
 
+
 def getArtists(trackInfo):
     artists = []
     for artist in trackInfo['contributors']:
         artists.append(artist['name'])
     return artists
+
 
 def writeFlacTags(filename, tags, coverArtId):
     ''' Function to write tags to FLAC file.'''
@@ -364,7 +369,7 @@ def multireplace(string, replacements):
     return filename
 
 
-def nameFile(trackInfo, albInfo, playlistInfo=False):
+def nameFile(trackInfo, albInfo, playlistInfo=False): #TODO clean this mess!
     ''' Names a file according to a template defined in deezpyrc.'''
     # replacedict is the dictionary to replace pathspec with
     if playlistInfo:
@@ -467,6 +472,11 @@ def getBlowfishKey(trackId):
     return bfKey
 
 
+def printPercentage(text, sizeOnDisk, totalFileSize):
+    percentage = (sizeOnDisk / totalFileSize)*100
+    print("\r{} [{:0.2f}%]".format(text, percentage), end='')
+
+
 def decryptChunk(chunk, bfKey):
     ''' Decrypt a given encrypted chunk with a blowfish key. '''
     cipher = Cipher(algorithms.Blowfish(bfKey),
@@ -482,15 +492,15 @@ def downloadTrack(filename, ext, url, bfKey):
     tmpFile = f'{filename}.tmp'
     realFile = f'{filename}{ext}'
     if os.path.isfile(tmpFile):
-        print(f"Resuming download: {realFile}... ", end='', flush=True)
-        filesize = os.stat(tmpFile).st_size  # size downloaded file
-        # reduce filesize to a multiple of 2048 for seamless decryption
-        filesize = filesize - (filesize % 2048)
-        i = filesize/2048
-        req = resumeDownload(url, filesize)
+        text = f"Resuming download: {realFile}"
+        sizeOnDisk = os.stat(tmpFile).st_size  # size downloaded file
+        # reduce sizeOnDisk to a multiple of 2048 for seamless decryption
+        sizeOnDisk = sizeOnDisk - (sizeOnDisk % 2048)
+        i = sizeOnDisk/2048
+        req = resumeDownload(url, sizeOnDisk)
     else:
-        print(f"Downloading: {realFile}... ", end='', flush=True)
-        filesize = 0
+        text = f"Downloading: {realFile}"
+        sizeOnDisk = 0
         i = 0
         req = requests_retry_session().get(url, stream=True)
         if req.headers['Content-length'] == '0':
@@ -501,13 +511,15 @@ def downloadTrack(filename, ext, url, bfKey):
         if not os.path.isdir(fileDir):
             os.makedirs(fileDir)
 
+    totalChunks = i + int(req.headers['Content-Length'])/2048 # we need to i + .. because resumeDownload Content-Length return content length not downloaded, not full filesize
     # Decrypt content and write to file
     with open(tmpFile, 'ab') as fd:
-        fd.seek(filesize)  # jump to end of the file in order to append to it
+        fd.seek(sizeOnDisk)  # jump to end of the file in order to append to it
         # Only every third 2048 byte block is encrypted.
         for chunk in req.iter_content(2048):
             if i % 3 == 0 and len(chunk) >= 2048:
                 chunk = decryptChunk(chunk, bfKey)
+            printPercentage(text, i, totalChunks)
             fd.write(chunk)
             i += 1
     os.rename(tmpFile, realFile)
@@ -597,8 +609,7 @@ def downloadDeezer(url):
         return False
     mediaType, mediaId = deezerTypeId(url)
     if mediaType == 'track':
-        if getTrack(mediaId):
-            print("Done!")
+        getTrack(mediaId)
     # we can't invoke downloadDeezer() again, as in the else block because
     # playlists have a different tracklisting, not available in JSON
     elif mediaType == 'playlist':
@@ -612,6 +623,7 @@ def downloadDeezer(url):
     else:
         subtype = 'albums' if mediaType == 'artist' else 'tracks'
         info = getJSON(mediaType, mediaId)
+        print(info)
         # Save album cover art
         if config.getboolean('DEFAULT', 'save album art'):
             coverArtId = info['cover_small'].split('/')[-2]
