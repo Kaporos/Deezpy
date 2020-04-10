@@ -86,7 +86,7 @@ def loginUserToken(token):
     cookies = {'arl': token}
     session.cookies.update(cookies)
     req = apiCall('deezer.getUserData')
-    if not req['results']['USER']['USER_ID']:
+    if not req['USER']['USER_ID']:
         return False
     else:
         return True
@@ -160,16 +160,16 @@ def getJSON(mediaType, mediaId, subtype=""):
     return requests_retry_session().get(url).json()
 
 
-def getCoverArt(coverArtId, size, format):
-    ''' Retrieves the coverart/playlist image from the official API, and 
+def getCoverArt(coverArtId, size, ext):
+    ''' Retrieves the coverart/playlist image from the official API, and
         returns it.
     '''
-    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{size}x{size}.{format}'
+    url = f'https://e-cdns-images.dzcdn.net/images/cover/{coverArtId}/{size}x{size}.{ext}'
     r = requests_retry_session().get(url)
     return r.content
 
 
-def saveCoverArt(image, filename):
+def saveCoverArt(filename, image):
     path = os.path.dirname(filename)
     if not os.path.isdir(path):
         os.makedirs(path)
@@ -200,7 +200,7 @@ def getLyrics(trackId):
                 lyricLine = f'{time}{" "}{line}'
             finally:
                 syncedLyrics += lyricLine + '\n' # TODO add duration?
-        lyrics['sylt'] = syncedLyrics 
+        lyrics['sylt'] = syncedLyrics
     if 'LYRICS_TEXT' in req: # unsynced lyrics
         lyrics['uslt'] = req['LYRICS_TEXT'].replace('\r', '')
     return lyrics
@@ -211,7 +211,7 @@ def saveLyrics(lyrics, filename):
     '''
     if not (lyrics and filename):
         return False
-    
+
     lyricsType = 'uslt'
     if 'sylt' in lyrics:
         ext = 'lrc'
@@ -220,7 +220,7 @@ def saveLyrics(lyrics, filename):
         ext = 'txt'
     else:
         raise ValueError('Unknown lyrics type')
-    
+
     with open(f'{filename}.{ext}', 'a') as f:
         for line in lyrics[lyricsType]:
             f.write(line)
@@ -240,7 +240,7 @@ def getTags(trackInfo, albInfo, playlist):
         'tracknumber' : trackInfo['track_position'],
         'album'       : trackInfo['album']['title'],
         'date'        : trackInfo['album']['release_date'],
-        'artist'      : getArtists(trackInfo),
+        'artist'      : getAllContributors(trackInfo),
         'bpm'         : trackInfo['bpm'],
         'albumartist' : albInfo['artist']['name'],
         'totaltracks' : albInfo['nb_tracks'],
@@ -262,7 +262,7 @@ def getTags(trackInfo, albInfo, playlist):
     return tags
 
 
-def getArtists(trackInfo):
+def getAllContributors(trackInfo):
     artists = []
     for artist in trackInfo['contributors']:
         artists.append(artist['name'])
@@ -283,7 +283,7 @@ def writeFlacTags(filename, tags, coverArtId):
         ext = config.get('DEFAULT', 'album art format')
         image = getCoverArt(coverArtId,
             config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
-            ext) 
+            ext)
         pic = mutagen.flac.Picture()
         pic.encoding=3
         if ext == 'jpg':
@@ -336,7 +336,7 @@ def writeMP3Tags(filename, tags, coverArtId):
         ext = config.get('DEFAULT', 'album art format')
         image = getCoverArt(coverArtId,
             config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
-            ext) 
+            ext)
         id3Handle = ID3(filename)
         if ext == 'jpg':
             mime='image/jpeg'
@@ -357,8 +357,7 @@ def multireplace(string, replacements):
     '''
     # remove back/forward slashes before replacing
     for key in replacements:
-        replacements[key] = replacements[key].replace('/', '_')
-        replacements[key] = replacements[key].replace('\\', '_')
+        replacements[key] = replacements[key].replace('/', '_').replace('\\', '_')
     # Sorts the dict so that longer ones first to keep shorter substrings
     # from matching where the longer ones should take place
     substrs = sorted(replacements, key=len, reverse=True)
@@ -370,53 +369,63 @@ def multireplace(string, replacements):
     return filename
 
 
-def nameFile(trackInfo, albInfo, playlistInfo=False): #TODO clean this mess!
-    ''' Names a file according to a template defined in deezpyrc.'''
+def namePlaylistTrack(trackInfo, playlistInfo):
+    ''' Names a track in a playlist according to a template defined in deezpyrc.'''
     # replacedict is the dictionary to replace pathspec with
-    if playlistInfo:
-        pathspec = config.get('DEFAULT','playlist naming template')
-        replacedict = {
-            '<Playlist Title>' : playlistInfo[0]['title'],
-            '<Track#>'         : f'{playlistInfo[1]:02d}',
-            '<Title>'          : trackInfo['title']
-        }
-    elif trackInfo:
-        pathspec = config.get('DEFAULT','naming template')
-        replacedict = {
-            '<Album Artist>' : albInfo['artist']['name'],
-            '<Artist>'       : trackInfo['artist']['name'],
-            '<Album>'        : trackInfo['album']['title'],
-            '<Date>'         : trackInfo['album']['release_date'],
-            '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
-            '<Track#>'       : f'{trackInfo["track_position"]:02d}',
-            '<Disc#>'        : f'{trackInfo["disk_number"]:d}',
-            '<Title>'        : trackInfo['title'],
-            '<Label>'        : albInfo['label'],
-            '<UPC>'          : albInfo['upc'],
-            '<Record Type>'  : albInfo['record_type']
-        }
-    else: # Album cover template
-        trackPath = config.get('DEFAULT','naming template')
-        if trackPath.endswith('/'):
-            trackPath = trackPath[:-1]
-        match = re.search(r'.*/', trackPath)
-        if match: # Nested template
-            pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
-        else:
-            pathspec = config.get('DEFAULT','album art naming template')
-        replacedict = {
-            '<Album Artist>' : albInfo['artist']['name'],
-            '<Label>'        : albInfo['label'],
-            '<UPC>'          : albInfo['upc'],
-            '<Record Type>'  : albInfo['record_type'],
-            '<Album>'        : albInfo['title'],
-            '<Date>'         : albInfo['release_date'],
-            '<Year>'         : albInfo['release_date'].split('-')[0],
-        }
-    # remove back/forward slashes before sanitizing path
-    for key in replacedict:
-        replacedict[key] = replacedict[key].replace('/', '_')
-        replacedict[key] = replacedict[key].replace('\\', '_')
+    pathspec = config.get('DEFAULT','playlist naming template')
+    replacedict = {
+        '<Playlist Title>' : playlistInfo[0]['title'],
+        '<Track#>'         : f'{playlistInfo[1]:02d}',
+        '<Title>'          : trackInfo['title']
+    }
+    # replace template with tags
+    filename = multireplace(pathspec, replacedict)
+    return filename
+
+
+def nameTrack(trackInfo, albInfo):
+    ''' Names a track according to a template defined in deezpyrc.'''
+    # replacedict is the dictionary to replace pathspec with
+    pathspec = config.get('DEFAULT','naming template')
+    replacedict = {
+        '<Album Artist>' : albInfo['artist']['name'],
+        '<Artist>'       : trackInfo['artist']['name'],
+        '<Album>'        : trackInfo['album']['title'],
+        '<Date>'         : trackInfo['album']['release_date'],
+        '<Year>'         : trackInfo['album']['release_date'].split('-')[0],
+        '<Track#>'       : f'{trackInfo["track_position"]:02d}',
+        '<Disc#>'        : f'{trackInfo["disk_number"]:d}',
+        '<Title>'        : trackInfo['title'],
+        '<Label>'        : albInfo['label'],
+        '<UPC>'          : albInfo['upc'],
+        '<Record Type>'  : albInfo['record_type']
+    }
+    # replace template with tags
+    filename = multireplace(pathspec, replacedict)
+    return filename
+
+
+def nameAlbumArt(albInfo):
+    ''' Names the coverart to a template defined in deezpyrc.'''
+    # replacedict is the dictionary to replace pathspec with
+    trackPath = config.get('DEFAULT','naming template')
+    if trackPath.endswith('/'):
+        trackPath = trackPath[:-1]
+    match = re.search(r'.*/', trackPath)
+    if match: # Nested template
+        pathspec = match.group(0) + config.get('DEFAULT','album art naming template')
+    else:
+        pathspec = config.get('DEFAULT','album art naming template')
+
+    replacedict = {
+        '<Album Artist>' : albInfo['artist']['name'],
+        '<Label>'        : albInfo['label'],
+        '<UPC>'          : albInfo['upc'],
+        '<Record Type>'  : albInfo['record_type'],
+        '<Album>'        : albInfo['title'],
+        '<Date>'         : albInfo['release_date'],
+        '<Year>'         : albInfo['release_date'].split('-')[0],
+    }
     # replace template with tags
     filename = multireplace(pathspec, replacedict)
     return filename
@@ -564,7 +573,11 @@ def getTrack(trackId, playlist=False):
         return False
     ext = getExt(quality)
 
-    fullFilenamePath = nameFile(trackInfo, albInfo, playlist)
+    if playlist:
+        fullFilenamePath = namePlaylistTrack(trackInfo, playlist)
+    else:
+        fullFilenamePath = nameTrack(trackInfo, albInfo)
+
     fullFilenamePathExt = f'{fullFilenamePath}{ext}'
     if os.path.isfile(fullFilenamePathExt):
         print(f"{fullFilenamePathExt} already exists!")
@@ -595,45 +608,60 @@ def getTrack(trackId, playlist=False):
     return True
 
 
+def getPlaylist(mediaId): #download tracks via downloadDeezer
+    playlistInfo = getJSON('playlist', mediaId)
+    ids = [x["id"] for x in playlistInfo['tracks']['data']]
+    playlistTrack = 1
+    for trackId in ids: # TODO add download indicators
+        playlist = (playlistInfo, playlistTrack)
+        getTrack(trackId, playlist)
+        playlistTrack += 1
+
+
+def getAlbum(mediaId):
+    albumInfo = getJSON('album', mediaId)
+    print(f"\n{albumInfo['artist']['name']} - {albumInfo['title']}")
+
+    urls = [x['link'] for x in albumInfo['tracks']['data']]
+    [downloadDeezer(url) for url in urls] # extract + download track urls
+
+    if config.getboolean('DEFAULT', 'save album art'):
+        coverArtId = albumInfo['cover_small'].split('/')[-2]
+        ext = config.get('DEFAULT', 'album art format')
+        image = getCoverArt(coverArtId,
+                    config.getint('DEFAULT', 'album art size'),
+                    ext)
+        filename = f'{nameAlbumArt(albumInfo)}.{ext}'
+        saveCoverArt(filename, image)
+
+
+def getArtist(mediaId):
+    artistInfo = getJSON('artist', mediaId, subtype='albums')
+    urls = [x["link"] for x in artistInfo['data']] #extract + download album urls
+    [downloadDeezer(url) for url in urls]
+
+
 def downloadDeezer(url):
-    ''' Extract individual song links from albums and artist pages
-        and invokes getTrack(). If it is just a track link,
-        only invoke getTrack().
+    ''' Calls the correct download functions for downloading a track, playlist,
+        album or artist.
     '''
     if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)'
                     '(playlist|artist|album|track|)\/[0-9]*', url) is None:
         print(f'"{url}": not a valid link')
         return False
     mediaType, mediaId = deezerTypeId(url)
+
     if mediaType == 'track':
         getTrack(mediaId)
-    # we can't invoke downloadDeezer() again, as in the else block because
-    # playlists have a different tracklisting, not available in JSON
+
     elif mediaType == 'playlist':
-        playlistInfo = getJSON(mediaType, mediaId)
-        ids = [x["id"] for x in playlistInfo['tracks']['data']]
-        playlistTrack = 1
-        for trackId in ids: # TODO add download indicators
-            playlist = (playlistInfo, playlistTrack)
-            getTrack(trackId, playlist)
-            playlistTrack += 1
-    else:
-        subtype = 'albums' if mediaType == 'artist' else 'tracks'
-        info = getJSON(mediaType, mediaId)
-        # Save album cover art
-        if config.getboolean('DEFAULT', 'save album art'):
-            coverArtId = info['cover_small'].split('/')[-2]
-            ext = config.get('DEFAULT', 'album art format')
-            image = getCoverArt(coverArtId,
-                config.getint('DEFAULT', 'album art size'),
-                ext)
-            filename = nameFile(trackInfo=None, albInfo=info, playlistInfo=None)
-            saveCoverArt(image, f'{filename}.{ext}')
-        if mediaType == 'album': # TODO add download indicators
-            print(f"\n{info['artist']['name']} - {info['title']}")
-        info = getJSON(mediaType, mediaId, subtype)
-        urls = [x["link"] for x in info['data']]
-        [downloadDeezer(url) for url in urls]
+        getPlaylist(info)
+
+    elif mediaType == 'album':
+        getAlbum(mediaId)
+
+    elif mediaType == 'artist':
+        getArtist(mediaId)
 
 
 def platformSettingsPath():
