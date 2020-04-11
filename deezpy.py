@@ -542,7 +542,6 @@ def getTrack(trackId, playlist=False):
     trackInfo = getJSON('track', trackId)
     albInfo = getJSON('album', trackInfo['album']['id'])
     privateTrackInfo = apiCall('deezer.pageTrack', {'SNG_ID': trackId})['DATA']
-    print(privateTrackInfo['MD5_ORIGIN'])
 #    if "FALLBACK" in req:
         # Some songs in a playlist have other IDs than the same song
         # in an album/artist page. These ids from songs in a playlist
