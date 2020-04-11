@@ -415,14 +415,14 @@ def nameAlbumArt(albInfo):
     return filename
 
 
-def getTrackDownloadUrl(MD5, MEDIA_VERSION, quality):
+def getTrackDownloadUrl(MD5, MEDIA_VERSION, SNGID, quality):
     ''' Calculates the deezer download URL from
         a given MD5_ORIGIN (MD5 hash), SNG_ID and MEDIA_VERSION.
     '''
     # this specific unicode char is needed
     char = b'\xa4'.decode('unicode_escape')
     step1 = char.join((MD5,
-                      quality, privateTrackInfo['SNG_ID'],
+                      quality, SNGID,
                       MEDIA_VERSION))
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in step1]))
@@ -541,7 +541,8 @@ def getTrack(trackId, playlist=False):
     '''
     trackInfo = getJSON('track', trackId)
     albInfo = getJSON('album', trackInfo['album']['id'])
-    privateTrackInfo = apiCall('deezer.pageTrack', {'SNG_ID': trackId})
+    privateTrackInfo = apiCall('deezer.pageTrack', {'SNG_ID': trackId})['DATA']
+    print(privateTrackInfo['MD5_ORIGIN'])
 #    if "FALLBACK" in req:
         # Some songs in a playlist have other IDs than the same song
         # in an album/artist page. These ids from songs in a playlist
@@ -565,7 +566,7 @@ def getTrack(trackId, playlist=False):
         print(f"{f'{fullFilenamePath}{ext}'} already exists!")
         return False
 
-    decryptedUrl = getTrackDownloadUrl(privateTrackInfo['MD5_ORIGIN'], privateTrackInfo['MEDIA_VERSION'], quality)
+    decryptedUrl = getTrackDownloadUrl(privateTrackInfo['MD5_ORIGIN'], privateTrackInfo['MEDIA_VERSION'], privateTrackInfo['SNG_ID'], quality)
     bfKey = getBlowfishKey(privateTrackInfo['SNG_ID'])
     if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey): # Track downloaded successfully
         tags = getTags(trackInfo, albInfo, playlist)
