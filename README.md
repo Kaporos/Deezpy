@@ -4,7 +4,7 @@ It is made to be a minimal and open Deezer downloader, with no obfuscated code. 
 
 ## Installation
 To run the script, you must first download some dependencies. Deezpy is made with as few non-standard libraries as possible in mind. The non-standard libraries needed are `requests`, `cryptography`, `mutagen` and `pathvalidate`.
-You can install them by running `pip install -r requirements.txt` in the deezpy folder
+You can install them by running `pip install -r requirements.txt` in the deezpy folder.
 
 Running `pip install requests cryptography mutagen pathvalidate` or using the packagemanager of your choice is also an option.
 
@@ -54,7 +54,7 @@ If you want to change the quality setting, you can edit the `deezpyrc` file. The
 - "3" = MP3 256 kbps
 - "4" = MP3 128 kbps
 
-## Download path options
+### Download path options
 There are many options available for the path specification.
 For album tracks:
 - Album Artist
@@ -73,6 +73,15 @@ For playlists:
 - Playlist Title
 - Track#
 - Title
+
+For album covers:
+- Album Artist
+- Label
+- UPC
+- Record Type
+- Album
+- Date
+- Year
 
 You can modify these to your liking by editing the settings file. The forward slashes indicate a new folder. The default path specifications serve as an example.
 
