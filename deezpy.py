@@ -102,7 +102,7 @@ def getTokens():
 
 def mobileApiCall(method, json_req=False):
     ''' Requests info from the hidden mobile api: gateway.php
-        Is used in privateApi(), and implements loginless download
+        Is used in privateTrackInfo(), and implements loginless download
     '''
     unofficialApiQueries = {
         'api_key' : '4VCYIJUCDLOUELGD1V8WBVYBNVDYOXEWSLLZDONGBBDFVXTZJRXPR29JRLQFO6ZE',
@@ -117,22 +117,6 @@ def mobileApiCall(method, json_req=False):
         json=json_req
         ).json()
     return req['results']
-
-
-def privateApi(songId):
-    ''' Get the required info from the hidden mobile api
-        to decrypt the files.
-    '''
-    req = apiCall('deezer.pageTrack', {'SNG_ID': songId})
-#    req = mobileApiCall('song_getData', {'SNG_ID': songId}) #deprecated
-#    if "FALLBACK" in req:
-        # Some songs in a playlist have other IDs than the same song
-        # in an album/artist page. These ids from songs in a playlist
-        # do not return albInfo properly. The FALLBACK id works, however.
-#        songId = privateInfo["FALLBACK"]['SNG_ID']
-        # we need to replace the track with the FALLBACK one
-#        privateInfo = privateApi(songId)
-    return req['DATA']
 
 
 # https://www.peterbe.com/plog/best-practice-with-retries-with-requests
@@ -431,15 +415,15 @@ def nameAlbumArt(albInfo):
     return filename
 
 
-def getTrackDownloadUrl(privateInfo, quality):
+def getTrackDownloadUrl(MD5, MEDIA_VERSION, quality):
     ''' Calculates the deezer download URL from
         a given MD5_ORIGIN (MD5 hash), SNG_ID and MEDIA_VERSION.
     '''
     # this specific unicode char is needed
     char = b'\xa4'.decode('unicode_escape')
-    step1 = char.join((privateInfo['MD5_ORIGIN'],
-                      quality, privateInfo['SNG_ID'],
-                      privateInfo['MEDIA_VERSION']))
+    step1 = char.join((MD5,
+                      quality, privateTrackInfo['SNG_ID'],
+                      MEDIA_VERSION))
     m = hashlib.md5()
     m.update(bytes([ord(x) for x in step1]))
     step2 = f'{m.hexdigest()}{char}{step1}{char}'
@@ -448,7 +432,7 @@ def getTrackDownloadUrl(privateInfo, quality):
                     modes.ECB(), default_backend())
     encryptor = cipher.encryptor()
     step3 = encryptor.update(bytes([ord(x) for x in step2])).hex()
-    cdn = privateInfo['MD5_ORIGIN'][0]
+    cdn = MD5[0]
     decryptedUrl = f'https://e-cdns-proxy-{cdn}.dzcdn.net/mobile/1/{step3}'
     return decryptedUrl
 
@@ -459,11 +443,6 @@ def resumeDownload(url, filesize):
                                        headers=resume_header,
                                        stream=True)
     return req
-
-
-def deezerTypeId(url):
-    ''' Checks if url is valid and then returns type ID.'''
-    return url.split('/')[-2:]
 
 
 def getBlowfishKey(trackId):
@@ -532,7 +511,7 @@ def downloadTrack(filename, ext, url, bfKey):
     return True
 
 
-def getQuality(privateInfo):
+def getQuality(privateTrackInfo):
     # if the preferred quality is not available, get the one below etc.
     if args.quality:
         qualitySetting = int(args.quality)-1
@@ -542,7 +521,7 @@ def getQuality(privateInfo):
     filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320', 'FILESIZE_MP3_256', 'FILESIZE_MP3_128'] #, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
     qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
     for i in range(qualitySetting, len(qualities)-1):
-        if int(privateInfo[filesize[i]]) != 0:
+        if int(privateTrackInfo[filesize[i]]) != 0:
             if not i == qualitySetting:
                 print(f"This song is not available in the preferred quality {filesize[qualitySetting][9:]}, downloading in {filesize[i][9:]}")
             return qualities[i]
@@ -562,8 +541,15 @@ def getTrack(trackId, playlist=False):
     '''
     trackInfo = getJSON('track', trackId)
     albInfo = getJSON('album', trackInfo['album']['id'])
-    privateInfo = privateApi(trackId)
-    quality = getQuality(privateInfo)
+    privateTrackInfo = apiCall('deezer.pageTrack', {'SNG_ID': trackId})
+#    if "FALLBACK" in req:
+        # Some songs in a playlist have other IDs than the same song
+        # in an album/artist page. These ids from songs in a playlist
+        # do not return albInfo properly. The FALLBACK id works, however.
+#        songId = privateTrackInfo["FALLBACK"]['SNG_ID']
+        # we need to replace the track with the FALLBACK one
+#        privateTrackInfo = privateTrackInfo(songId)
+    quality = getQuality(privateTrackInfo)
     if not quality:
         print((f"Song {trackInfo['title']} not available, skipping..."
                "\nMaybe try with a higher quality setting?"))
@@ -579,12 +565,12 @@ def getTrack(trackId, playlist=False):
         print(f"{f'{fullFilenamePath}{ext}'} already exists!")
         return False
 
-    decryptedUrl = getTrackDownloadUrl(privateInfo, quality)
-    bfKey = getBlowfishKey(privateInfo['SNG_ID'])
+    decryptedUrl = getTrackDownloadUrl(privateTrackInfo['MD5_ORIGIN'], privateTrackInfo['MEDIA_VERSION'], quality)
+    bfKey = getBlowfishKey(privateTrackInfo['SNG_ID'])
     if downloadTrack(fullFilenamePath, ext, decryptedUrl, bfKey): # Track downloaded successfully
         tags = getTags(trackInfo, albInfo, playlist)
         if config.getboolean('DEFAULT', 'embed album art'):
-            coverArtId = privateInfo['ALB_PICTURE']
+            coverArtId = privateTrackInfo['ALB_PICTURE']
         else:
             coverArtId = None
         if config.getboolean('DEFAULT', 'save lyrics'):
@@ -641,11 +627,15 @@ def downloadDeezer(url):
     ''' Calls the correct download functions for downloading a track, playlist,
         album or artist.
     '''
-    if re.fullmatch(r'(http(|s):\/\/)?(www\.)?(deezer\.com\/(.*?)?)'
-                    '(playlist|artist|album|track|)\/[0-9]*', url) is None:
+    regexStr = r'(?:(?:https?:\/\/)?(?:www\.))?deezer\.com\/(?:.*?\/)?(playlist|artist|album|track|)\/([0-9]*)(?:\/?)(tracks|albums|related_playlist|top_track)?'
+    if re.fullmatch(regexStr, url) is None:
         print(f'"{url}": not a valid link')
         return False
-    mediaType, mediaId = deezerTypeId(url)
+    p = re.compile(regexStr)
+    m = p.match(url)
+    mediaType = m.group(1)
+    mediaId = m.group(2)
+    mediaSubType = m.group(3)
 
     if mediaType == 'track':
         getTrack(mediaId)
@@ -658,6 +648,7 @@ def downloadDeezer(url):
 
     elif mediaType == 'artist':
         getArtist(mediaId)
+
 
 
 def platformSettingsPath():
