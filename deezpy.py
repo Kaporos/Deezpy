@@ -349,7 +349,7 @@ def multireplace(string, replacements):
     regexp = re.compile('|'.join(map(re.escape, substrs)))
     # For each match, look up the new string in the replacements
     replacedString = regexp.sub(lambda match: replacements[match.group(0)], string)
-    filename = sanitize_filepath(file_path=replacedString, replacement_text='_', platform='universal')
+    filename = sanitize_filepath(file_path=replacedString, replacement_text='_', platform='auto')
     return filename
 
 
