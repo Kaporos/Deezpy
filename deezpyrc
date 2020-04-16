@@ -2,7 +2,7 @@
 #Downloads can be downloaded in Deezpy's working directory,
 #or in a directory outside of Deezpy's working dir by typing the full path of the directory
 
-user token = 
+user token =
 naming template = downloads/<Album Artist>/(<Year>) - <Album>/<Disc#>-<Track#> - <Title>
 playlist naming template = downloads/playlists/<Playlist Title>/<Track#> - <Title>
 quality = 1
@@ -11,7 +11,8 @@ save lyrics = False
 embed lyrics = True
 save album art = False
 album art naming template = Cover
-album art size = 1000
 album art format = png
+album art size = 1000
+album art embed format = png
 embed album art size = 500
 artist separator = ;

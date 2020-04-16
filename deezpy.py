@@ -264,7 +264,7 @@ def writeFlacTags(filename, tags, coverArtId):
     handle.delete()  # delete pre-existing tags and pics
     handle.clear_pictures()
     if coverArtId:
-        ext = config.get('DEFAULT', 'album art format')
+        ext = config.get('DEFAULT', 'album art embed format')
         image = getCoverArt(coverArtId,
             config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
             ext)
@@ -317,7 +317,7 @@ def writeMP3Tags(filename, tags, coverArtId):
     handle.save()
     # Cover art
     if coverArtId:
-        ext = config.get('DEFAULT', 'album art format')
+        ext = config.get('DEFAULT', 'album art embed format')
         image = getCoverArt(coverArtId,
             config.getint('DEFAULT', 'embed album art size'), # TODO: write to temp folder?
             ext)
