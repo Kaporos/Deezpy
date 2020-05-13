@@ -521,10 +521,18 @@ def getQuality(privateTrackInfo):
     filesize = ['FILESIZE_FLAC', 'FILESIZE_MP3_320', 'FILESIZE_MP3_256', 'FILESIZE_MP3_128'] #, 'FILESIZE_MP3_64', 'FILESIZE_AAC_64'] TODO add MP3_64 and AAC_64
     qualities = ['9','3','5','1'] # filesize[i] corresponds with qualities[i]
     for i in range(qualitySetting, len(qualities)-1):
-        if int(privateTrackInfo[filesize[i]]) != 0:
-            if not i == qualitySetting:
-                print(f"This song is not available in the preferred quality {filesize[qualitySetting][9:]}, downloading in {filesize[i][9:]}")
-            return qualities[i]
+        # Check if Deezer can serve this track in the required quality
+        candidateUrl = getTrackDownloadUrl(privateTrackInfo['MD5_ORIGIN'], privateTrackInfo['MEDIA_VERSION'], privateTrackInfo['SNG_ID'], qualities[i])
+        request = requests_retry_session().get(candidateUrl)
+        try:
+            request.raise_for_status()
+        except HTTPError:
+            # if the format is not available, Deezer returns a 403 error
+            continue
+        # if the track is found, log if the preferred quality was not available
+        if not i == qualitySetting:
+            print(f"This song is not available in the preferred quality {filesize[qualitySetting][9:]}, downloading in {filesize[i][9:]}")
+        return qualities[i]
     return None
 
 
