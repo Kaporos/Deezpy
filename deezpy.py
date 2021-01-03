@@ -240,7 +240,7 @@ def getTags(trackInfo, albInfo, playlist):
         tags['totaltracks'] = playlist[0]['nb_tracks']
         tags['album'] = playlist[0]['title']
         tags['tracknumber'] = playlist[1]
-        tags['disknumber'] = ''
+        tags['discnumber'] = ''
         tags['date'] = ''
         trackInfo['album']['cover_xl'] = playlist[0]['picture_xl']
     return tags
