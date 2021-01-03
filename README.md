@@ -1,4 +1,6 @@
 # Deezpy - A Deezer track downloader for the commandline
+## THIS IS A CLONE ! I'M NOT THE CREATOR OF THIS TOOL , IT'S https://notabug.org/desu/ , but he removed notabug repository
+
 Deezpy is a Deezer track downloader and decrypter, written in Python 3.
 It is made to be a minimal and open Deezer downloader, with no obfuscated code. Deezpy is commandline only so it is very lightweight, and there is still room for improvement.
 
