@@ -218,6 +218,13 @@ def getTags(trackInfo, albInfo, playlist):
         genre = albInfo['genres']['data'][0]['name']
     except:
         genre = ''
+
+    if "error" in albInfo.keys():
+    	return {
+        'totaltracks': '',
+        'tracknumber': '',
+        'artist': ['Various Artist']
+        }
     tags = {
         'title'       : trackInfo['title'],
         'discnumber'  : trackInfo['disk_number'],
@@ -526,7 +533,7 @@ def getQuality(privateTrackInfo):
         request = requests_retry_session().get(candidateUrl)
         try:
             request.raise_for_status()
-        except HTTPError:
+        except requests.exceptions.HTTPError:
             # if the format is not available, Deezer returns a 403 error
             continue
         # if the track is found, log if the preferred quality was not available
