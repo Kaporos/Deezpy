@@ -100,25 +100,6 @@ def getTokens():
     sidToken = req['SESSION_ID']
 
 
-def mobileApiCall(method, json_req=False):
-    ''' Requests info from the hidden mobile api: gateway.php
-        Is used in privateTrackInfo(), and implements loginless download
-    '''
-    unofficialApiQueries = {
-        'api_key' : '4VCYIJUCDLOUELGD1V8WBVYBNVDYOXEWSLLZDONGBBDFVXTZJRXPR29JRLQFO6ZE',
-        'sid'     : sidToken,
-        'output'  : '3',
-        'input'   : '3',
-        'method'  : method
-        }
-    req = requests_retry_session().post(
-        url='https://api.deezer.com/1.0/gateway.php',
-        params=unofficialApiQueries,
-        json=json_req
-        ).json()
-    return req['results']
-
-
 # https://www.peterbe.com/plog/best-practice-with-retries-with-requests
 def requests_retry_session(retries=3, backoff_factor=0.3,
                            status_forcelist=(500, 502, 504)):
